@@ -1,0 +1,114 @@
+/* ============================= */
+/* CONTENEDOR ADM                */
+/* ============================= */
+
+#admContainer {
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+/* ============================= */
+/* BOTONES ADM                   */
+/* ============================= */
+
+#admContainer button {
+  margin-top: 15px;
+  padding: 12px;
+  font-size: 16px;
+  cursor: pointer;
+  width: 100%;
+}
+
+/* ============================= */
+/* SECCIONES                     */
+/* ============================= */
+
+#admContainer .section {
+  border: 1px solid #ccc;
+  padding: 12px;
+  margin: 14px 0;
+  background: #fff;
+}
+
+/* ============================= */
+/* CHECKBOXES (ADM)              */
+/* ============================= */
+
+#admContainer label {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+#admContainer input[type="checkbox"] {
+  transform: scale(1.2);
+  margin: 0;
+}
+
+/* ============================= */
+/* EXPORT / IMPORT               */
+/* ============================= */
+
+#exportImportContainer {
+  margin-top: 15px;
+}
+
+#exportImportContainer.hidden {
+  display: none;
+}
+/* ===================================== */
+/* FIX CHECKBOXES ADM (alineación real)  */
+/* ===================================== */
+
+/* SOLO labels que contienen checkbox */
+#admContainer label:has(input[type="checkbox"]) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  text-align: left;
+  width: auto;
+}
+
+/* checkbox */
+#admContainer input[type="checkbox"] {
+  margin: 0;
+  transform: scale(1.2);
+}
+
+/* evitar que el texto se vaya a la derecha */
+#admContainer label:has(input[type="checkbox"]) span,
+#admContainer label:has(input[type="checkbox"]) {
+  white-space: nowrap;
+}
+/* ===================================== */
+/* BOTONES ADM (colores consistentes)    */
+/* ===================================== */
+
+#admContainer button {
+  background-color: #1976d2;   /* azul */
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+}
+
+/* botón publicar (verde, ya existente) */
+#admContainer button.publicar,
+#admContainer button.btn-publicar {
+  background-color: #2e7d32;
+}
+
+/* hover */
+#admContainer button:hover {
+  opacity: 0.9;
+}
+
+
+
+
+
+
+
+
+

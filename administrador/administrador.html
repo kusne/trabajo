@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Carga de Órdenes Operacionales</title>
+
+  <link rel="stylesheet" href="../funciones/estilos/base.css">
+  <link rel="stylesheet" href="./administrador.css">
+</head>
+
+<body>
+  <!-- LOGIN ADM -->
+  <div id="loginContainer" style="max-width:320px; margin:40px auto; display:none;">
+    <h3>Acceso Administrador</h3>
+
+    <label>Email</label>
+    <input type="email" id="loginEmail">
+
+    <label>Contraseña</label>
+    <input type="password" id="loginPassword">
+
+    <button type="button" id="btnLogin">Ingresar</button>
+    <button type="button" id="btnForgot">Olvidé mi contraseña</button>
+    <p id="loginError" style="color:red; display:none;"></p>
+  </div>
+
+  <div class="app" id="admContainer" style="display:none;">
+    <div style="text-align: right; margin-bottom: 10px;">
+      <button id="btnLogout">Cerrar sesión</button>
+    </div>
+
+    <h2>Formulario de Carga de Órdenes Operacionales</h2>
+
+    <label for="numOrden">Número de Orden</label>
+    <input type="text" id="numOrden" placeholder="Ej: OOP2344/26" required>
+
+    <label for="textoRef">Texto de Referencia (opcional)</label>
+    <input type="text" id="textoRef" placeholder="Ej: Orden semanal">
+
+    <label for="fechaVigencia">Fecha de Vigencia (obligatoria)</label>
+    <input type="date" id="fechaVigencia" required>
+
+    <label for="franjas">Franjas horarias (una por línea: HORARIO - LUGAR - TÍTULO)</label>
+    <textarea id="franjas" rows="6" required
+      placeholder="01 a 06 hs - Puente Carretero Cabecera Santo Tomé - Presencia Activa
+01 a 03 hs - RN168 KM18 - Control Vehicular"></textarea>
+
+    <div class="caducidad-container">
+      <label for="fechaCaducidad">Fecha de Caducidad (obligatoria)</label>
+      <input type="text" id="fechaCaducidad" required placeholder="DD/MM/AAAA o A FINALIZAR">
+
+      <div class="checkbox-row">
+        <label class="checkbox-container" for="aFinalizarCheckbox">
+          <input type="checkbox" id="aFinalizarCheckbox">
+          <span>A FINALIZAR</span>
+        </label>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:10px; align-items:center;">
+      <button type="button" onclick="agregarOrden()">
+        Agregar / Actualizar Orden
+      </button>
+
+      <button type="button" id="btnPublicarOrdenes" onclick="publicarOrdenes()"
+        style="background:#2e7d32; color:white; font-weight:bold;">
+        Publicar órdenes
+      </button>
+    </div>
+
+    <hr>
+
+    <h3>Órdenes Cargadas</h3>
+    <select id="ordenExistente" size="6"></select>
+    <button type="button" onclick="eliminarOrden()">Eliminar Orden Seleccionada</button>
+
+    <div id="infoOrden"></div>
+  </div>
+
+  <!-- shared scripts -->
+  <script src="../funciones/js/storage.js"></script>
+  <script src="../funciones/js/dom.js"></script>
+  <script src="../funciones/js/uiValidacion.js"></script>
+  <script src="../funciones/js/datos.js"></script>
+  <script src="../funciones/js/ordersSync.js"></script>
+  <script src="../funciones/js/eliminacion.js"></script>
+  <script src="../funciones/js/caducidad.js"></script>
+
+  <!-- Supabase -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+  <!-- adm -->
+  <script src="./administrador.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
