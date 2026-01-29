@@ -1,8 +1,3 @@
-/* administrador.css
-   UI limpia y consistente con base.css.
-   Enfocado en: formulario, selector, botones, bloque caducidad + checkbox.
-*/
-
 :root{
   --bg: #f5f5f5;
   --card: #ffffff;
@@ -12,16 +7,12 @@
   --shadow: 0 6px 18px rgba(0,0,0,.08);
   --radius: 14px;
 
-  --primary: #2e7d32;     /* publicar */
+  --primary: #2e7d32;
   --primary-2: #256628;
   --danger: #b3261e;
   --danger-2: #8f201a;
 
   --chip: #f2f3f5;
-}
-
-html, body{
-  height: 100%;
 }
 
 body{
@@ -31,9 +22,8 @@ body{
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
 }
 
-/* Contenedor principal (mismo patrón que usuario) */
 .app{
-  max-width: 520px;
+  max-width: 560px;
   margin: 18px auto;
   background: var(--card);
   border: 1px solid var(--border);
@@ -42,27 +32,17 @@ body{
   padding: 16px;
 }
 
-/* Login container ya viene inline, pero lo acomodamos un poco */
-#loginContainer{
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 16px;
-}
+.hidden{ display:none !important; }
 
-h2, h3{
-  margin: 6px 0 14px;
-}
+h2,h3{ margin: 8px 0 14px; }
 
 label{
-  display: block;
+  display:block;
   font-size: 13px;
   color: var(--muted);
   margin: 10px 0 6px;
 }
 
-/* Inputs */
 input[type="text"],
 input[type="email"],
 input[type="password"],
@@ -79,29 +59,14 @@ select{
   font-size: 14px;
 }
 
-textarea{
-  resize: vertical;
-  min-height: 110px;
-}
+textarea{ resize: vertical; }
 
-/* Selector órdenes */
-#ordenExistente{
-  width: 100%;
-  height: 160px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  padding: 8px;
-  background: #fff;
-}
-
-/* Separadores */
 hr{
   border: none;
   border-top: 1px solid var(--border);
   margin: 16px 0;
 }
 
-/* Botones */
 button{
   border: 1px solid var(--border);
   background: #fff;
@@ -113,48 +78,73 @@ button{
   transition: transform .02s ease, background .15s ease, border-color .15s ease, opacity .15s ease;
 }
 
-button:hover{
-  background: #fafafa;
-  border-color: #d6d6d6;
-}
+button:hover{ background:#fafafa; border-color:#d6d6d6; }
+button:active{ transform: translateY(1px); }
 
-button:active{
-  transform: translateY(1px);
-}
-
-/* Botón publicar (si querés moverlo a CSS en vez de inline) */
 #btnPublicarOrdenes{
   background: var(--primary);
   color: #fff;
   border-color: transparent;
   font-weight: 700;
 }
+#btnPublicarOrdenes:hover{ background: var(--primary-2); }
 
-#btnPublicarOrdenes:hover{
-  background: var(--primary-2);
-}
-
-/* Botón eliminar sugerido */
-button[onclick="eliminarOrden()"]{
+.btn-danger{
   background: var(--danger);
-  color: #fff;
+  color:#fff;
   border-color: transparent;
   font-weight: 700;
   margin-top: 10px;
 }
+.btn-danger:hover{ background: var(--danger-2); }
 
-button[onclick="eliminarOrden()"]:hover{
-  background: var(--danger-2);
+#ordenExistente{
+  width: 100%;
+  height: 160px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 8px;
+  background: #fff;
 }
 
-/* Logout arriba a la derecha */
-#btnLogout{
+/* ===== TOPBAR + TABS ===== */
+.adm-topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.tabs{
+  display:flex;
+  gap: 8px;
+  background: var(--chip);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 6px;
+}
+
+.tab-btn{
+  border: none;
+  background: transparent;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.tab-btn.active{
+  background: #fff;
+  border: 1px solid var(--border);
+}
+
+.btn-logout{
   border-radius: 999px;
   padding: 8px 12px;
   font-size: 13px;
 }
 
-/* Caducidad + checkbox */
+/* ===== Caducidad ===== */
 .caducidad-container{
   margin-top: 6px;
   padding: 12px;
@@ -165,56 +155,67 @@ button[onclick="eliminarOrden()"]:hover{
 
 .checkbox-row{
   margin-top: 10px;
-  display: flex;
-  align-items: center;
+  display:flex;
+  align-items:center;
 }
 
-/* checkbox estilo “chip” */
 .checkbox-container{
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
   padding: 8px 10px;
   border-radius: 999px;
   background: var(--chip);
   border: 1px solid var(--border);
-  user-select: none;
-  cursor: pointer;
+  cursor:pointer;
 }
 
 .checkbox-container input{
   width: 18px;
   height: 18px;
   margin: 0;
-  cursor: pointer;
 }
 
-.checkbox-container span{
-  font-size: 12px;
-  color: #222;
-  letter-spacing: .4px;
+/* ===== Layout acciones ===== */
+.acciones{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  margin-top: 12px;
 }
 
-/* Estado disabled “visual” para publicar */
-.disabled{
-  opacity: .55;
-  pointer-events: none;
+/* ===== Guardia (placeholder) ===== */
+.guardia-card{
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+  background: #fbfbfb;
+  margin-top: 12px;
 }
 
-/* Utilitario */
-.hidden{
-  display: none !important;
+.muted{
+  color: var(--muted);
+  margin: 0 0 10px;
 }
 
-/* Responsive */
-@media (max-width: 560px){
-  .app{
-    margin: 10px;
-    padding: 14px;
-  }
+.guardia-grid{
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
+.pill{
+  display:inline-block;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  font-size: 13px;
+}
 
-
-
+@media (max-width: 620px){
+  .app{ margin: 10px; }
+  .guardia-grid{ grid-template-columns: 1fr; }
+  .acciones{ flex-direction: column; align-items: stretch; }
+}
 
