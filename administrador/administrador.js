@@ -1,3 +1,6 @@
+```js
+// administrador/administrador.js
+
 // ===== PUENTE GLOBAL (NO SE ROMPE CON DOMContentLoaded NI CON PISADAS) =====
 window.agregarOrden = function () {
   if (typeof window.__adm_agregarOrden === "function") return window.__adm_agregarOrden();
@@ -430,9 +433,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!email) return alert("Escribí tu email primero.");
 
       const repoName = location.pathname.split("/")[1] || "";
-      const redirectTo = repoName
-        ? `${location.origin}/${repoName}/reset.html`
-        : `${location.origin}/reset.html`;
+      const redirectTo = repoName ? `${location.origin}/${repoName}/reset.html` : `${location.origin}/reset.html`;
 
       const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
 
@@ -441,8 +442,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 });
-
-
 
 
 
