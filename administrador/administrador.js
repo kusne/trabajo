@@ -1,5 +1,3 @@
-// administrador/administrador.js
-
 // ===== PUENTE GLOBAL (NO SE ROMPE CON DOMContentLoaded NI CON PISADAS) =====
 window.agregarOrden = function () {
   if (typeof window.__adm_agregarOrden === "function") return window.__adm_agregarOrden();
@@ -29,7 +27,6 @@ if (!window.supabase || typeof window.supabase.createClient !== "function") {
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 function isoToLatam(iso) {
-  // "2026-01-20" -> "20/01/2026"
   const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return iso || "";
   return `${m[3]}/${m[2]}/${m[1]}`;
@@ -37,27 +34,39 @@ function isoToLatam(iso) {
 
 function normalizarOrdenParaPublicar(o) {
   const out = { ...o };
-
-  // vigencia viene de <input type="date"> => ISO
   out.vigencia = isoToLatam(out.vigencia);
 
-  // asegurar franjas array
   if (Array.isArray(out.franjas)) {
     out.franjas = out.franjas.map((f) => ({ ...f }));
   } else {
     out.franjas = [];
   }
-
   return out;
 }
 
-// ======================================================
-// TODO EL CÓDIGO DEPENDIENTE DEL DOM VA ACÁ
-// ======================================================
 document.addEventListener("DOMContentLoaded", async () => {
   // ===== CONTENEDORES LOGIN / ADM =====
   const loginContainer = document.getElementById("loginContainer");
   const admContainer = document.getElementById("admContainer");
+
+  // ===== TABS =====
+  const tabBtns = Array.from(document.querySelectorAll(".tab-btn"));
+  const tabOrdenes = document.getElementById("tab-ordenes");
+  const tabGuardia = document.getElementById("tab-guardia");
+
+  function setTab(name) {
+    // name: "ordenes" | "guardia"
+    tabBtns.forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+    if (tabOrdenes) tabOrdenes.classList.toggle("hidden", name !== "ordenes");
+    if (tabGuardia) tabGuardia.classList.toggle("hidden", name !== "guardia");
+  }
+
+  tabBtns.forEach((b) => {
+    b.addEventListener("click", () => setTab(b.dataset.tab));
+  });
+
+  // default
+  setTab("ordenes");
 
   // ===== LOGIN ELEMENTS =====
   const btnLogin = document.getElementById("btnLogin");
@@ -328,8 +337,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     const ordenes = StorageApp.cargarOrdenes();
-    console.log("[ADM] Ordenes local:", Array.isArray(ordenes) ? ordenes.length : "no-array", ordenes?.[0]);
-
     const payloadPublicar = Array.isArray(ordenes) ? ordenes.map(normalizarOrdenParaPublicar) : [];
 
     const { data: { session }, error: sessionErr } = await supabaseClient.auth.getSession();
@@ -432,7 +439,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!email) return alert("Escribí tu email primero.");
 
       const repoName = location.pathname.split("/")[1] || "";
-      const redirectTo = repoName ? `${location.origin}/${repoName}/reset.html` : `${location.origin}/reset.html`;
+      const redirectTo = repoName
+        ? `${location.origin}/${repoName}/reset.html`
+        : `${location.origin}/reset.html`;
 
       const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
 
@@ -441,8 +450,4 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 });
-
-
-
-
 
