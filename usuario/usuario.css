@@ -1,809 +1,260 @@
-/* wsp/wsp.css */
+```css
+/* usuario/usuario.css */
 
-/* Reset básico */
-* { box-sizing: border-box; }
+/* Nota:
+   - El reset y variables base vienen de ../funciones/estilos/base.css
+   - Este archivo solo ajusta la UI del módulo usuario.
+*/
 
 :root{
-  /* Ajustes finos (tocá solo estos 2 si querés calibrar) */
-  --check-col-x: 100%;   /* columna de checks: 55% a 70% suele ser ideal */
-  --check-col-y: 35px;   /* baja/sube la columna entera (probá 4px / 8px) */
+  /* calibración de “chips” (si querés ajustar rápido) */
+  --chip-min-h: 42px;
+  --chip-pad-y: 10px;
+  --chip-pad-x: 12px;
+  --chip-radius: 14px;
 
-  --check-scale: 1.5;
+  --chip-gap: 10px;
+  --grid-gap: 10px;
+
+  --chip-border: rgba(0,0,0,.12);
+  --chip-bg: #fff;
+  --chip-bg-active: rgba(46,125,50,.10);
+
+  --shadow: 0 6px 18px rgba(0,0,0,.08);
 }
 
-body {
-  margin: 0;
-  padding: 0;
-  font-family: Arial, Helvetica, sans-serif;
-  background: #f5f5f5;
-}
-
-/* Contenedor principal */
-.app {
-  max-width: 480px;
-  margin: 0 auto;
-  padding: 12px;
-}
-
-/* Secciones */
-.section {
-  border: 1px solid #ccc;
-  padding: 10px;
-  margin: 12px 0;
-  background: #fff;
-  border-radius: 4px;
-}
-
-/* Botones */
-button {
-  width: 100%;
-  margin-top: 15px;
-  padding: 12px;
-  font-size: 16px;
-  cursor: pointer;
-}
-
-/* Selects */
-select {
-  font-size: 16px;
-  padding: 8px;
-  width: 100%;
-  margin-bottom: 10px;
-}
-
-/* Inputs y textareas */
-input[type="number"],
-textarea {
-  font-size: 16px;
-  padding: 6px;
-  width: 100%;
-  margin-bottom: 8px;
-}
-
-/* Título dentro de secciones */
-.section > label {
-  font-weight: bold;
-  display: block;
-  margin-bottom: 6px;
-}
-
-/* ===== CHECKBOX: comportamiento base ===== */
-.section input[type="checkbox"]{
-  transform: scale(var(--check-scale));
-  margin: 0;
-}
-
-/* Obligatorios */
-.obligatorio { border: 2px solid #c62828; }
-
-/* Ocultos */
-.hidden { display: none; }
-
-/* =========================================================
-   SOLUCIÓN ROBUSTA SIN “ARRUINAR” LA UI (GENERAL)
-   - Base para listas verticales (personal, elementos, etc.)
-   ========================================================= */
-
-/* Cada opción = una fila */
-label.check{
-  position: relative;
-  display: block;
-  width: 100%;
-  margin: 6px 0;
-  font-size: 16px;
-
-  /* fija una altura de renglón estable (evita drift) */
-  line-height: 26px;
-  min-height: 26px;
-
-  /* Deja espacio para que el checkbox no pise el texto */
-  padding-right: 42%;
-}
-
-/* Checkbox: columna fija “adentro” + ajuste vertical de columna */
-label.check > input[type="checkbox"]{
-  position: absolute;
-
-  /* Columna horizontal, más al centro/derecha (no al borde) */
-  left: var(--check-col-x);
-
-  /* Centro vertical del renglón + offset configurable para bajar toda la columna */
-  top: calc(50% + var(--check-col-y));
-
-  transform: translate(-50%, -50%) scale(var(--check-scale));
-  margin: 0;
-}
-
-/* Backup si hay inputs sueltos */
-.section input[type="checkbox"]:first-of-type{
-  position: relative;
-  top: var(--check-col-y);
-}
-
-/* =========================================================
-   MÓVILES + MOTOS (SOLO #bloqueMovil)
-   Objetivo: ver “horizontales” (3 móviles en un renglón, motos abajo)
-   sin romper el resto del sistema de checkboxes
-   ========================================================= */
-
-/* rótulo “Motos” un poco separado */
-#bloqueMovil .subtitulo{
-  margin-top: 12px;
-}
-
-/* 3 móviles en 1 renglón */
-#bloqueMovil .grid-moviles{
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-top: 6px;
-}
-
-/* motos: 4 columnas (se acomoda solo en filas) */
-#bloqueMovil .grid-motos{
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  margin-top: 6px;
-}
-
-/* “chip” de cada número + checkbox a la derecha */
-#bloqueMovil label.check.check-chip{
-  position: static !important;     /* anula el absolute global SOLO acá */
-  display: flex !important;
-  align-items: center;
-  justify-content: space-between;
-
-  width: 100% !important;
-  padding: 8px 10px !important;
-  margin: 0 !important;
-
-  line-height: normal !important;
-  min-height: 34px !important;
-
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: #fff;
-}
-
-/* texto del número */
-#bloqueMovil label.check.check-chip > span{
-  font-weight: 600;
-}
-
-/* checkbox normal (sin left/top absolute) */
-#bloqueMovil label.check.check-chip > input[type="checkbox"]{
-  position: static !important;
-  left: auto !important;
-  top: auto !important;
-  transform: scale(var(--check-scale)) !important;
-  margin: 0 !important;
-}
-/* =========================================================
-   ESCOPETAS HORIZONTAL (SOLO #bloqueEscopeta)
-   ========================================================= */
-
-#bloqueEscopeta .fila-escopetas{
-  display: grid;
-  grid-template-columns: repeat(2, 1fr); /* 2 escopetas en un renglón */
-  gap: 10px;
-  margin-top: 6px;
-}
-
-/* Reutiliza el “chip” y anula el absolute global solo acá */
-#bloqueEscopeta label.check.check-chip{
-  position: static !important;
-  display: flex !important;
-  align-items: center;
-  justify-content: space-between;
-
-  width: 100% !important;
-  padding: 8px 10px !important;
-  margin: 0 !important;
-
-  line-height: normal !important;
-  min-height: 34px !important;
-
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: #fff;
-}
-
-#bloqueEscopeta label.check.check-chip > span{
-  font-weight: 600;
-}
-
-#bloqueEscopeta label.check.check-chip > input[type="checkbox"]{
-  position: static !important;
-  left: auto !important;
-  top: auto !important;
-  transform: scale(var(--check-scale)) !important;
-  margin: 0 !important;
-}
-/* =========================================================
-   HT HORIZONTAL (SOLO #bloqueHT)
-   ========================================================= */
-#bloqueHT .fila-ht{
-  display: grid;
-  grid-template-columns: repeat(4, 1fr); /* 4 HT en un renglón */
-  gap: 10px;
-  margin-top: 6px;
-}
-
-#bloqueHT label.check.check-chip{
-  position: static !important;
-  display: flex !important;
-  align-items: center;
-  justify-content: space-between;
-
-  width: 100% !important;
-  padding: 8px 10px !important;
-  margin: 0 !important;
-
-  line-height: normal !important;
-  min-height: 34px !important;
-
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: #fff;
-}
-
-#bloqueHT label.check.check-chip > span{ font-weight: 600; }
-
-#bloqueHT label.check.check-chip > input[type="checkbox"]{
-  position: static !important;
-  left: auto !important;
-  top: auto !important;
-  transform: scale(var(--check-scale)) !important;
-  margin: 0 !important;
-}
-/* =========================================================
-   PDA HORIZONTAL (SOLO #bloquePDA)
-   ========================================================= */
-#bloquePDA .fila-pda{
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-  margin-top: 6px;
-}
-
-#bloquePDA label.check.check-chip{
-  position: static !important;
-  display: flex !important;
-  align-items: center;
-  justify-content: space-between;
-
-  width: 100% !important;
-  padding: 8px 10px !important;
-  margin: 0 !important;
-
-  line-height: normal !important;
-  min-height: 34px !important;
-
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: #fff;
-}
-
-#bloquePDA label.check.check-chip > span{ font-weight: 600; }
-
-#bloquePDA label.check.check-chip > input[type="checkbox"]{
-  position: static !important;
-  left: auto !important;
-  top: auto !important;
-  transform: scale(var(--check-scale)) !important;
-  margin: 0 !important;
-}
-/* =========================================================
-   IMPRESORA HORIZONTAL (SOLO #bloqueImpresora)
-   ========================================================= */
-#bloqueImpresora .fila-impresora{
-  display: grid;
-  grid-template-columns: repeat(2, 1fr); /* 2 impresoras en un renglón */
-  gap: 10px;
-  margin-top: 6px;
-}
-
-#bloqueImpresora label.check.check-chip{
-  position: static !important;
-  display: flex !important;
-  align-items: center;
-  justify-content: space-between;
-
-  width: 100% !important;
-  padding: 8px 10px !important;
-  margin: 0 !important;
-
-  line-height: normal !important;
-  min-height: 34px !important;
-
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: #fff;
-}
-
-#bloqueImpresora label.check.check-chip > span{ font-weight: 600; }
-
-#bloqueImpresora label.check.check-chip > input[type="checkbox"]{
-  position: static !important;
-  left: auto !important;
-  top: auto !important;
-  transform: scale(var(--check-scale)) !important;
-  margin: 0 !important;
-}
-/* =========================================================
-   ALOMETRO HORIZONTAL (SOLO #bloqueAlometro)
-   ========================================================= */
-#bloqueAlometro .fila-alometro{
-  display: grid;
-  grid-template-columns: repeat(3, 1fr); /* 3 en un renglón */
-  gap: 10px;
-  margin-top: 6px;
-}
-
-#bloqueAlometro label.check.check-chip{
-  position: static !important;
-  display: flex !important;
-  align-items: center;
-  justify-content: space-between;
-
-  width: 100% !important;
-  padding: 8px 10px !important;
-  margin: 0 !important;
-
-  line-height: normal !important;
-  min-height: 34px !important;
-
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: #fff;
-}
-
-#bloqueAlometro label.check.check-chip > span{ font-weight: 600; }
-
-#bloqueAlometro label.check.check-chip > input[type="checkbox"]{
-  position: static !important;
-  left: auto !important;
-  top: auto !important;
-  transform: scale(var(--check-scale)) !important;
-  margin: 0 !important;
-}
-
-/* =========================================================
-   ALCOHOLIMETRO HORIZONTAL (SOLO #bloqueAlcoholimetro)
-   ========================================================= */
-#bloqueAlcoholimetro .fila-alcoholimetro{
-  display: grid;
-  grid-template-columns: repeat(3, 1fr); /* 3 en un renglón */
-  gap: 10px;
-  margin-top: 6px;
-}
-
-#bloqueAlcoholimetro label.check.check-chip{
-  position: static !important;
-  display: flex !important;
-  align-items: center;
-  justify-content: space-between;
-
-  width: 100% !important;
-  padding: 8px 10px !important;
-  margin: 0 !important;
-
-  line-height: normal !important;
-  min-height: 34px !important;
-
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: #fff;
-}
-
-#bloqueAlcoholimetro label.check.check-chip > span{ font-weight: 600; }
-
-#bloqueAlcoholimetro label.check.check-chip > input[type="checkbox"]{
-  position: static !important;
-  left: auto !important;
-  top: auto !important;
-  transform: scale(var(--check-scale)) !important;
-  margin: 0 !important;
-}
-
-/* ===== mismos elementos (bloque) ===== */
-#bloqueMismosElementos{
-  padding: 8px 10px;
-}
-
-#bloqueMismosElementos #wrapMismosElementos{
-  margin: 0;
-  font-weight: 600;
-}
-/* ===== Encabezado con logo (arriba derecha) ===== */
-.brand{
-  display: flex;
-  align-items: flex-start;         /* logo bien arriba */
-  justify-content: space-between;  /* texto izq / logo der */
-  gap: 12px;
-  margin: 6px 0 12px 0;
-}
-
-.brand-text h3{
-  margin: 0;
-}
-
-.brand-sub{
-  font-size: 12px;
-  opacity: 0.85;
-}
-
-.brand-logo{
-  width: 90px;          /* más grande (probá 80 / 90 / 100) */
-  height: 90px;
-  object-fit: contain;
-  display: block;
-
-  /* QUITA el “aro” exterior */
-  border: 0;
-  background: transparent;
-  padding: 0;
-  border-radius: 0;     /* opcional: por si querés evitar redondeo extra */
-}
-/* =========================
-   TEMA PREMIUM (Opción C)
-   ========================= */
-:root{
-  --bg-app: #EEF2F7;
-  --card-bg: #FFFFFF;
-
-  --text: #111827;
-  --text-2: #4B5563;
-
-  --border: #C9D2DE;
-  --border-strong: #1F3A5F;     /* azul acero institucional */
-  --danger: #A61B1B;            /* rojo institucional */
-
-  --focus: rgba(31, 58, 95, 0.18);
-}
-
-/* Fondo general */
-body{
-  background: var(--bg-app);
-  color: var(--text);
-}
-
-/* Contenedor */
-.app{
-  max-width: 520px;              /* un poco más “premium” en desktop */
-  padding: 14px;
-}
-
-/* Tarjetas (secciones) */
-.section{
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 6px 18px rgba(17, 24, 39, 0.06);
-}
-
-/* Destacados (tu clase) */
-.section.destacado{
-  background: #F5F8FC;           /* leve azul gris */
-  border: 2px solid var(--border-strong);
-}
-
-/* Obligatorios (tu clase) */
-.obligatorio{
-  border: 2px solid var(--danger) !important;
-}
-
-/* Títulos y subtítulos */
-.section > label{
-  color: var(--text);
-}
-
-.brand-text h3{
-  color: var(--text);
-  letter-spacing: 0.2px;
-}
-
-.brand-sub{
-  color: var(--text-2);
-}
-
-/* Selects, inputs, textarea: look “institucional” */
-select,
-input[type="number"],
-textarea{
-  background: #FFFFFF;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--text);
-  outline: none;
-}
-
-select:focus,
-input[type="number"]:focus,
-textarea:focus{
-  border-color: var(--border-strong);
-  box-shadow: 0 0 0 4px var(--focus);
-}
-
-/* Botón principal */
-button#btnEnviar{
-  background: var(--border-strong);
-  color: #fff;
-  border: 0;
-  border-radius: 12px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  box-shadow: 0 10px 20px rgba(31, 58, 95, 0.18);
-}
-
-button#btnEnviar:hover{
-  filter: brightness(1.05);
-}
-
-button#btnEnviar:active{
-  transform: translateY(1px);
-}
-
-/* Chips (móviles/motos/elementos): un poco más premium */
-#bloqueMovil label.check.check-chip,
-#bloqueEscopeta label.check.check-chip,
-#bloqueHT label.check.check-chip,
-#bloquePDA label.check.check-chip,
-#bloqueImpresora label.check.check-chip,
-#bloqueAlometro label.check.check-chip,
-#bloqueAlcoholimetro label.check.check-chip{
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: 0 3px 10px rgba(17, 24, 39, 0.05);
-}
-
-/* Logo: queda limpio (sin aro) y grande (ya lo tenés así) */
-.brand-logo{
-  width: 96px;     /* ajustá 90/96/110 */
-  height: 96px;
-}
-/* =========================
-   TEMA PLATA + AZUL FUERTE
-   (pegar al FINAL de wsp.css)
-   ========================= */
-:root{
-  --bg-app: #2B2F36;          /* gris oscuro */
-  --card-bg: #D7DCE3;         /* plata */
-  --card-bg-2: #C9D0DA;       /* plata un poco más oscuro */
-
-  --text: #0B1220;            /* texto oscuro sobre plata */
-  --text-2: #1F2937;
-
-  --blue-strong: #0B3D91;     /* azul fuerte */
-  --blue-strong-2: #072E6D;   /* azul más profundo (hover/focus) */
-
-  --border: #8E99A8;          /* borde neutro */
-  --focus: rgba(11, 61, 145, 0.25);
-
-  --danger: #B11A1A;
-}
-
-/* Fondo general */
-body{
-  background: var(--bg-app);
-  color: var(--text);
-}
-
-/* Contenedor */
+/* contenedor */
 .app{
   max-width: 520px;
+  margin: 0 auto;
   padding: 14px;
 }
 
-/* Tarjetas */
-.section{
-  background: var(--card-bg);
-  border: 3px solid var(--blue-strong);     /* MÁS ANCHO + AZUL */
-  border-radius: 14px;
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
-}
-
-/* Destacados */
-.section.destacado{
-  background: var(--card-bg-2);
-  border: 4px solid var(--blue-strong);     /* aún más ancho */
-}
-
-/* Obligatorios */
-.obligatorio{
-  border: 3px solid var(--danger) !important;
-}
-
-/* Títulos */
-.section > label{
-  color: var(--text);
+/* header marca */
+.brand{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  margin-bottom: 14px;
 }
 
 .brand-text h3{
-  color: var(--text);
-  letter-spacing: 0.2px;
+  margin: 0;
+  font-size: 18px;
 }
 
 .brand-sub{
-  color: var(--text-2);
-  opacity: 0.9;
+  margin-top: 2px;
+  font-size: 12px;
+  opacity: .8;
 }
 
-/* Inputs */
+.brand-logo{
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
+/* labels arriba */
+.top-label{
+  display:block;
+  margin: 10px 2px 6px;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+/* selects/inputs/textarea base */
 select,
 input[type="number"],
+input[type="text"],
 textarea{
-  background: #EEF1F6;                     /* plata claro */
-  border: 2px solid var(--border);
-  border-radius: 12px;
-  color: var(--text);
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(0,0,0,.14);
+  padding: 10px 12px;
+  background: #fff;
   outline: none;
 }
 
 select:focus,
 input[type="number"]:focus,
+input[type="text"]:focus,
 textarea:focus{
-  border-color: var(--blue-strong);
-  box-shadow: 0 0 0 4px var(--focus);
+  border-color: rgba(46,125,50,.55);
 }
 
-/* Botón principal */
-button#btnEnviar{
-  background: var(--blue-strong);
-  color: #fff;
-  border: 0;
-  border-radius: 14px;
+/* secciones */
+.section{
+  background: #fff;
+  border: 1px solid rgba(0,0,0,.10);
+  border-radius: 18px;
+  padding: 12px;
+  margin: 12px 0;
+  box-shadow: var(--shadow);
+}
+
+.section > label{
+  display:block;
   font-weight: 800;
-  letter-spacing: 0.3px;
-  box-shadow: 0 14px 28px rgba(11, 61, 145, 0.30);
+  margin-bottom: 10px;
+  font-size: 13px;
+  letter-spacing: .2px;
 }
 
-button#btnEnviar:hover{
-  background: var(--blue-strong-2);
+.section .subtitulo{
+  display:block;
+  margin-top: 12px;
+  margin-bottom: 8px;
+  font-weight: 800;
+  font-size: 12px;
+  opacity: .85;
 }
 
-button#btnEnviar:active{
+/* destacado / obligatorio (sin inventar colores fuertes) */
+.destacado{
+  border-color: rgba(0,0,0,.12);
+}
+
+.obligatorio{
+  /* el archivo base ya marca lo obligatorio si querés;
+     acá no forzamos estilos fuertes */
+}
+
+/* grids */
+.grid-personal,
+.grid-moviles,
+.grid-motos{
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--grid-gap);
+}
+
+@media (min-width: 420px){
+  .grid-personal{
+    grid-template-columns: 1fr 1fr;
+  }
+  .grid-motos{
+    grid-template-columns: 1fr 1fr;
+  }
+  .grid-moviles{
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
+
+/* filas */
+.fila-escopetas,
+.fila-ht,
+.fila-pda,
+.fila-impresora,
+.fila-alometro,
+.fila-alcoholimetro{
+  display:flex;
+  flex-wrap:wrap;
+  gap: var(--chip-gap);
+}
+
+/* check base */
+.check{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+}
+
+/* chip */
+.check-chip{
+  min-height: var(--chip-min-h);
+  padding: var(--chip-pad-y) var(--chip-pad-x);
+  border: 1px solid var(--chip-border);
+  border-radius: var(--chip-radius);
+  background: var(--chip-bg);
+  box-shadow: 0 2px 10px rgba(0,0,0,.06);
+}
+
+/* texto del chip */
+.check-chip span{
+  display:block;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.1;
+  padding-right: 6px;
+}
+
+/* checkbox dentro del chip */
+.check-chip input[type="checkbox"]{
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+}
+
+/* estado tildado (fallback sin :has por compatibilidad) */
+.check-chip.checked{
+  background: var(--chip-bg-active);
+  border-color: rgba(46,125,50,.35);
+}
+
+/* JS-friendly: si en tu dom.js ya togglea clase, esto acompaña.
+   Si no, lo hacemos por CSS con :has cuando está disponible. */
+@supports selector(:has(*)){
+  .check-chip:has(input[type="checkbox"]:checked){
+    background: var(--chip-bg-active);
+    border-color: rgba(46,125,50,.35);
+  }
+}
+
+/* bloque “mismos elementos” */
+#bloqueMismosElementos{
+  padding: 10px 12px;
+}
+
+#wrapMismosElementos{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  font-weight: 800;
+}
+
+#wrapMismosElementos input{
+  width: 18px;
+  height: 18px;
+}
+
+/* FINALIZA - inputs en bloque (los <br> quedan, pero acomodamos) */
+#finaliza input[type="number"]{
+  margin: 6px 0 10px;
+}
+
+/* Observaciones */
+#obs{
+  margin-top: 6px;
+}
+
+/* botón enviar */
+#btnEnviar{
+  width: 100%;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: none;
+  border-radius: 16px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
+#btnEnviar:active{
   transform: translateY(1px);
 }
 
-/* Chips: coherentes con el tema */
-#bloqueMovil label.check.check-chip,
-#bloqueEscopeta label.check.check-chip,
-#bloqueHT label.check.check-chip,
-#bloquePDA label.check.check-chip,
-#bloqueImpresora label.check.check-chip,
-#bloqueAlometro label.check.check-chip,
-#bloqueAlcoholimetro label.check.check-chip{
-  background: #EDF1F7;
-  border: 2px solid var(--border);
-  border-radius: 14px;
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.14);
+/* utilidades */
+.hidden{
+  display:none !important;
 }
-
-/* Logo */
-.brand-logo{
-  width: 96px;
-  height: 96px;
-}
-/* ===== DORADO (labels superiores + título + subtítulo) ===== */
-:root{
-  --gold: #D4AF37;          /* dorado */
-  --gold-2: #B8890A;        /* dorado más oscuro (si querés) */
-}
-
-/* Labels: Tipo / Orden Operacional / Horario */
-label.top-label{
-  color: var(--gold);
-  font-weight: 800;
-  letter-spacing: 0.2px;
-  text-transform: uppercase;  /* opcional */
-}
-
-/* Título "Informe Operativo" */
-.brand-text h3{
-  color: var(--gold) !important;
-  font-weight: 900;
-}
-
-/* Subtítulo "Brigada Motorizada..." */
-.brand-sub{
-  color: var(--gold) !important;
-  font-weight: 700;
-  opacity: 1 !important;
-}
-/* ===== PERSONAL POLICIAL como chips (vertical) ===== */
-#bloquePersonal label.check.check-chip{
-  display: flex;            /* chip */
-  align-items: center;
-  gap: 10px;
-
-  width: 100%;              /* ocupa toda la fila => verticalidad */
-  box-sizing: border-box;
-
-  padding: 10px 12px;
-  margin: 8px 0;            /* separación vertical */
-
-  background: #EDF1F7;      /* similar a tus chips */
-  border: 2px solid var(--border);
-  border-radius: 14px;
-  box-shadow: 0 6px 14px rgba(0,0,0,0.14);
-}
-
-/* checkbox prolijo */
-#bloquePersonal label.check.check-chip input[type="checkbox"]{
-  width: 18px;
-  height: 18px;
-  margin: 0;
-  flex: 0 0 auto;
-}
-/* ===== PERSONAL como chips VERTICALES + checkbox alineado ===== */
-#bloquePersonal .grid-personal{
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-#bloquePersonal label.check.check-chip{
-  display: flex;
-  align-items: center;          /* centra verticalmente */
-  justify-content: space-between;
-
-  width: 100%;
-  box-sizing: border-box;
-
-  padding: 10px 12px;
-}
-
-/* texto */
-#bloquePersonal label.check.check-chip > span{
-  flex: 1 1 auto;
-}
-
-/* checkbox: anula el "absolute" que lo bajaba */
-#bloquePersonal label.check.check-chip > input[type="checkbox"]{
-  position: static !important;  /* clave: lo saca de abajo/derecha */
-  margin: 0 !important;
-  width: 18px;
-  height: 18px;
-  flex: 0 0 auto;
-}
-/* ===== OPCIÓN B: bajar checkbox SOLO en PERSONAL ===== */
-#bloquePersonal label.check.check-chip{
-  align-items: flex-start;   /* permite bajar el checkbox sin desalinear el texto */
-}
-
-#bloquePersonal label.check.check-chip input[type="checkbox"]{
-  margin-top: 10px;           /* <-- SUBÍ este número para bajarlo más (4/6/8/10) */
-}
-/* ===== PERSONAL: bajar checkbox (forzado) ===== */
-
-/* 1) Asegura el layout del chip */
-#bloquePersonal label.check.check-chip{
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start; /* referencia arriba */
-}
-
-/* 2) Baja SOLO los checkbox del personal */
-#bloquePersonal input[type="checkbox"].personal{
-  transform: translateY(6px) !important; /* <-- subí/bajá este valor */
-  margin: 0 !important;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+```
 
 
 
