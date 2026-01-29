@@ -10,9 +10,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   const divFinaliza = document.getElementById("finaliza");
   const divDetalles = document.getElementById("bloqueDetalles");
-  
+
   const divMismosElementos = document.getElementById("bloqueMismosElementos");
-  const chkMismosElementos = document.getElementById("mismosElementos"); 
+  const chkMismosElementos = document.getElementById("mismosElementos");
   const btnEnviar = document.getElementById("btnEnviar");
 
   // ===== Estado =====
@@ -201,6 +201,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   function actualizarDatosFranja() {
     if (!ordenSeleccionada) return;
     franjaSeleccionada = ordenSeleccionada.franjas[Number(selHorario.value)] || null;
+
+    // ✅ Defaults desde Guardia activa por LUGAR (solo si el usuario todavía no seleccionó nada)
+    if (franjaSeleccionada?.lugar && window.GuardiaSync?.aplicarDefaultsPorLugar) {
+      GuardiaSync.aplicarDefaultsPorLugar(franjaSeleccionada.lugar, { soloSiVacio: true })
+        .then((r) => {
+          if (r?.ok) console.log("[WSP] Defaults guardia aplicados:", r.patrullas);
+        })
+        .catch((e) => console.warn("[WSP] GuardiaSync error:", e));
+    }
   }
 
   function actualizarTipo() {
@@ -228,7 +237,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       aplicarElementos(payload);
       setElementosVisibles(false); // ocultar elementos
     } else {
-    setElementosVisibles(true);  // no hay guardado -> deja seleccionar manual
+      setElementosVisibles(true); // no hay guardado -> deja seleccionar manual
     }
   }
 
@@ -285,10 +294,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   function normalizarLugar(txt) {
     if (!txt) return "";
-    return txt
-      .toLowerCase()
-      .trim()
-      .replace(/\b\w/g, (l) => l.toUpperCase());
+    return txt.toLowerCase().trim().replace(/\b\w/g, (l) => l.toUpperCase());
   }
 
   function normalizarHorario(txt) {
@@ -301,17 +307,11 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
     return t;
   }
-  function setElementosVisibles(visible){
-    const ids = [
-      "bloqueEscopeta",
-      "bloqueHT",
-      "bloquePDA",
-      "bloqueImpresora",
-      "bloqueAlometro",
-      "bloqueAlcoholimetro"
-    ];
 
-    ids.forEach(id => {
+  function setElementosVisibles(visible) {
+    const ids = ["bloqueEscopeta", "bloqueHT", "bloquePDA", "bloqueImpresora", "bloqueAlometro", "bloqueAlcoholimetro"];
+
+    ids.forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;
       el.classList.toggle("hidden", !visible);
@@ -332,9 +332,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
     document.querySelectorAll('input[type="checkbox"]').forEach((c) => (c.checked = false));
 
     // inputs numéricos y textos
-    document
-      .querySelectorAll('input[type="number"], input[type="text"], textarea')
-      .forEach((i) => (i.value = ""));
+    document.querySelectorAll('input[type="number"], input[type="text"], textarea').forEach((i) => (i.value = ""));
 
     // observaciones default
     const obs = document.getElementById("obs");
@@ -357,33 +355,33 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
   // ======================================================
 
   function guardarElementosDeInicio() {
-  const payload = {
-    ts: Date.now(),
-    ESCOPETA: leerSeleccionPorClase("ESCOPETA"),
-    HT: leerSeleccionPorClase("HT"),
-    PDA: leerSeleccionPorClase("PDA"),
-    IMPRESORA: leerSeleccionPorClase("IMPRESORA"),
-    Alometro: leerSeleccionPorClase("Alometro"),
-    Alcoholimetro: leerSeleccionPorClase("Alcoholimetro"),
-  };
+    const payload = {
+      ts: Date.now(),
+      ESCOPETA: leerSeleccionPorClase("ESCOPETA"),
+      HT: leerSeleccionPorClase("HT"),
+      PDA: leerSeleccionPorClase("PDA"),
+      IMPRESORA: leerSeleccionPorClase("IMPRESORA"),
+      Alometro: leerSeleccionPorClase("Alometro"),
+      Alcoholimetro: leerSeleccionPorClase("Alcoholimetro"),
+    };
 
-  // 1) Si existe StorageApp y tiene la función, usalo
-  try {
-    if (typeof StorageApp !== "undefined" && typeof StorageApp.guardarElementosInicio === "function") {
-      StorageApp.guardarElementosInicio(payload);
-      return;
+    // 1) Si existe StorageApp y tiene la función, usalo
+    try {
+      if (typeof StorageApp !== "undefined" && typeof StorageApp.guardarElementosInicio === "function") {
+        StorageApp.guardarElementosInicio(payload);
+        return;
+      }
+    } catch (e) {
+      console.warn("[WSP] Error guardando en StorageApp, uso localStorage.", e);
     }
-  } catch (e) {
-    console.warn("[WSP] Error guardando en StorageApp, uso localStorage.", e);
-  }
 
-  // 2) Fallback seguro: localStorage
-  try {
-    localStorage.setItem("elementos_inicio", JSON.stringify(payload));
-  } catch (e) {
-    console.warn("[WSP] No se pudo guardar en localStorage.", e);
+    // 2) Fallback seguro: localStorage
+    try {
+      localStorage.setItem("elementos_inicio", JSON.stringify(payload));
+    } catch (e) {
+      console.warn("[WSP] No se pudo guardar en localStorage.", e);
+    }
   }
-}
 
   function cargarElementosGuardados() {
     try {
@@ -397,12 +395,16 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       return null;
     }
   }
-  function limpiarSeleccionElementos(){
-    const clases = ["ESCOPETA","HT","PDA","IMPRESORA","Alometro","Alcoholimetro"];
-    clases.forEach(clase => {
-      document.querySelectorAll("." + clase).forEach(inp => { inp.checked = false; });
+
+  function limpiarSeleccionElementos() {
+    const clases = ["ESCOPETA", "HT", "PDA", "IMPRESORA", "Alometro", "Alcoholimetro"];
+    clases.forEach((clase) => {
+      document.querySelectorAll("." + clase).forEach((inp) => {
+        inp.checked = false;
+      });
     });
   }
+
   function aplicarElementos(payload) {
     if (!payload) return;
 
@@ -428,10 +430,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
   if (chkMismosElementos) {
     chkMismosElementos.addEventListener("change", () => {
-
       // ✅ SI DESTILDA: modo manual + limpiar selección
       if (!chkMismosElementos.checked) {
-        limpiarSeleccionElementos();   // <- NUEVO
+        limpiarSeleccionElementos();
         setElementosVisibles(true);
         return;
       }
@@ -441,7 +442,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
       if (!payload) {
         alert("No hay elementos guardados del INICIA.");
         chkMismosElementos.checked = false;
-        limpiarSeleccionElementos();   // <- para que quede limpio también
+        limpiarSeleccionElementos();
         setElementosVisibles(true);
         return;
       }
@@ -521,6 +522,7 @@ Retención: (${retencion})
 Prohibición de Circulación: (${prohibicion})
 Cesión de Conducción: (${cesion})
 `;
+
       const detallesTexto = document.getElementById("detalles")?.value?.trim();
       if (detallesTexto) {
         textoDetalles = `Detalles:
@@ -530,19 +532,29 @@ ${detallesTexto}
     }
 
     // ===== Elementos (según modo) =====
-    const escopetasTXT = usarMismosElementos ? lineaDesdeArray(elementosInicio.ESCOPETA, "/") : seleccionLinea("ESCOPETA", "/");
+    const escopetasTXT = usarMismosElementos
+      ? lineaDesdeArray(elementosInicio.ESCOPETA, "/")
+      : seleccionLinea("ESCOPETA", "/");
     const htTXT = usarMismosElementos ? lineaDesdeArray(elementosInicio.HT, "/") : seleccionLinea("HT", "/");
     const pdaTXT = usarMismosElementos ? lineaDesdeArray(elementosInicio.PDA, "/") : seleccionLinea("PDA", "/");
-    const impTXT = usarMismosElementos ? lineaDesdeArray(elementosInicio.IMPRESORA, "/") : seleccionLinea("IMPRESORA", "/");
-    const alomTXT = usarMismosElementos ? lineaDesdeArray(elementosInicio.Alometro, "/") : seleccionLinea("Alometro", "/");
-    const alcoTXT = usarMismosElementos ? lineaDesdeArray(elementosInicio.Alcoholimetro, "/") : seleccionLinea("Alcoholimetro", "/");
+    const impTXT = usarMismosElementos
+      ? lineaDesdeArray(elementosInicio.IMPRESORA, "/")
+      : seleccionLinea("IMPRESORA", "/");
+    const alomTXT = usarMismosElementos
+      ? lineaDesdeArray(elementosInicio.Alometro, "/")
+      : seleccionLinea("Alometro", "/");
+    const alcoTXT = usarMismosElementos
+      ? lineaDesdeArray(elementosInicio.Alcoholimetro, "/")
+      : seleccionLinea("Alcoholimetro", "/");
 
     // ===== Texto principal =====
     const texto = `Policia de la Provincia de Santa Fe - Guardia Provincial
 Brigada Motorizada Centro Norte
 Tercio Charly
 
-${selTipo.value.charAt(0) + selTipo.value.slice(1).toLowerCase()} ${normalizarTituloOperativo(franjaSeleccionada.titulo)} ${ordenSeleccionada.num}
+${selTipo.value.charAt(0) + selTipo.value.slice(1).toLowerCase()} ${normalizarTituloOperativo(
+      franjaSeleccionada.titulo
+    )} ${ordenSeleccionada.num}
 
 Fecha: ${fecha}
 Horario: ${normalizarHorario(franjaSeleccionada.horario)}
@@ -597,31 +609,6 @@ ${document.getElementById("obs")?.value || "Sin novedad"}`;
     cargarOrdenesDisponibles();
   })();
 })();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
