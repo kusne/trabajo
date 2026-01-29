@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <link rel="icon" href="../favicon.ico">
+  <meta charset="UTF-8" />
+  <title>Informe Operativo WhatsApp</title>
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <link rel="stylesheet" href="../funciones/estilos/base.css" />
+  <link rel="stylesheet" href="./usuario.css" />
+</head>
+
+<body>
+  <div class="app">
+    
+    <div class="brand">
+      <div class="brand-text">
+        <h3>Informe Operativo</h3>
+        <div class="brand-sub">Brigada Motorizada Zona Centro Norte</div>
+      </div>
+      <!-- logo existente en tu estructura -->
+      <img src="./usuario_logo.png" alt="Sello" class="brand-logo">
+    </div>
+
+    <label class="top-label">Tipo</label>
+    <select id="tipo" class="obligatorio">
+      <option value="">Seleccionar</option>
+      <option value="INICIA">INICIA</option>
+      <option value="FINALIZA">FINALIZA</option>
+    </select>
+
+    <label class="top-label">Orden Operacional</label>
+    <select id="orden" class="obligatorio">
+      <option value="">Seleccionar</option>
+    </select>
+
+    <label class="top-label">Horario</label>
+    <select id="horario" class="obligatorio">
+      <option value="">Seleccionar horario</option>
+    </select>
+
+    <!-- PERSONAL -->
+    <div class="section obligatorio destacado" id="bloquePersonal">
+      <label>Personal Policial</label>
+
+      <div class="grid-personal">
+        <label class="check check-chip">
+          <span>Subinspector Mariaux</span>
+          <input type="checkbox" class="personal" value="Subinspector Mariaux A.">
+        </label>
+
+
+        <label class="check check-chip">
+          <span>Oficial Cardozo</span>
+          <input type="checkbox" class="personal" value="Oficial Cardozo A.">
+        </label>
+
+
+        <label class="check check-chip">
+          <span>Suboficial Pintos J.</span>
+          <input type="checkbox" class="personal" value="Suboficial Pintos J.">
+        </label>
+
+
+        <label class="check check-chip">
+          <span>Suboficial Aquino F.</span>
+          <input type="checkbox" class="personal" value="Suboficial Aquino F.">
+        </label>
+
+
+        <label class="check check-chip">
+          <span>Suboficial Lascurain I.</span>
+          <input type="checkbox" class="personal" value="Suboficial Lascurain I.">
+        </label>
+
+
+        <label class="check check-chip">
+          <span>Suboficial Delgado Y.</span>
+          <input type="checkbox" class="personal" value="Suboficial Delgado Y.">
+        </label>
+      </div>
+    </div>
+
+    <!-- MOVILES + MOTOS -->
+    <div class="section obligatorio destacado" id="bloqueMovil">
+      <label>Móviles:</label>
+
+
+      <div class="grid-moviles">
+        <label class="check check-chip"><span>12428</span><input type="checkbox" class="movil" value="12428"></label>
+        <label class="check check-chip"><span>10139</span><input type="checkbox" class="movil" value="10139"></label>
+        <label class="check check-chip"><span>12502</span><input type="checkbox" class="movil" value="12502"></label>
+      </div>
+
+
+      <label class="subtitulo">Motos:</label>
+
+
+      <div class="grid-motos">
+        <label class="check check-chip"><span>9092</span><input type="checkbox" class="moto" value="9092"></label>
+        <label class="check check-chip"><span>8989</span><input type="checkbox" class="moto" value="8989"></label>
+        <label class="check check-chip"><span>12089</span><input type="checkbox" class="moto" value="12089"></label>
+        <label class="check check-chip"><span>12090</span><input type="checkbox" class="moto" value="12090"></label>
+
+
+        <label class="check check-chip"><span>12091</span><input type="checkbox" class="moto" value="12091"></label>
+        <label class="check check-chip"><span>9037</span><input type="checkbox" class="moto" value="9037"></label>
+        <label class="check check-chip"><span>12087</span><input type="checkbox" class="moto" value="12087"></label>
+        <label class="check check-chip"><span>12088</span><input type="checkbox" class="moto" value="12088"></label>
+      </div>
+    </div>
+    
+    <!-- MISMOS ELEMENTOS (solo FINALIZA) -->
+    <div class="section hidden destacado" id="bloqueMismosElementos">
+      <label class="check" id="wrapMismosElementos">
+        <input type="checkbox" id="mismosElementos">
+        Elementos de Inicio
+      </label>
+    </div>
+
+    <!-- ESCOPETA -->
+    <div class="section destacado" id="bloqueEscopeta">
+      <label>ESCOPETA</label>
+
+      <div class="fila-escopetas">
+        <label class="check check-chip"><span>N°650367</span><input type="checkbox" class="ESCOPETA" value="N°650367"></label>
+        <label class="check check-chip"><span>N°650368</span><input type="checkbox" class="ESCOPETA" value="N°650368"></label>
+      </div>
+    </div>
+
+    <!-- HT -->
+    <div class="section destacado" id="bloqueHT">
+      <label>HT</label>
+
+      <div class="fila-ht">
+        <label class="check check-chip"><span>N°02</span><input type="checkbox" class="HT" value="N°02"></label>
+        <label class="check check-chip"><span>N°06</span><input type="checkbox" class="HT" value="N°06"></label>
+        <label class="check check-chip"><span>N°08</span><input type="checkbox" class="HT" value="N°08"></label>
+        <label class="check check-chip"><span>N°V03</span><input type="checkbox" class="HT" value="N°V03"></label>
+      </div>
+    </div>
+
+    <!-- PDA -->
+    <div class="section destacado" id="bloquePDA">
+      <label>PDA</label>
+
+      <div class="fila-pda">
+        <label class="check check-chip"><span>05</span><input type="checkbox" class="PDA" value="05"></label>
+        <label class="check check-chip"><span>19</span><input type="checkbox" class="PDA" value="19"></label>
+        <label class="check check-chip"><span>67</span><input type="checkbox" class="PDA" value="67"></label>
+        <label class="check check-chip"><span>68</span><input type="checkbox" class="PDA" value="68"></label>
+      </div>
+    </div>
+
+    <!-- IMPRESORA -->
+    <div class="section destacado" id="bloqueImpresora">
+      <label>IMPRESORA</label>
+
+      <div class="fila-impresora">
+        <label class="check check-chip"><span>N°05</span><input type="checkbox" class="IMPRESORA" value="N°05"></label>
+        <label class="check check-chip"><span>N°39</span><input type="checkbox" class="IMPRESORA" value="N°39"></label>
+      </div>
+    </div>
+
+    <!-- ALOMETRO -->
+    <div class="section destacado" id="bloqueAlometro">
+      <label>Alómetro</label>
+
+      <div class="fila-alometro">
+        <label class="check check-chip"><span>AREC-0127</span><input type="checkbox" class="Alometro" value="AREC-0127"></label>
+        <label class="check check-chip"><span>ARTL-0425</span><input type="checkbox" class="Alometro" value="ARTL-0425"></label>
+        <label class="check check-chip"><span>ARSA-0360</span><input type="checkbox" class="Alometro" value="ARSA-0360"></label>
+      </div>
+    </div>
+
+    <!-- ALCOHOLIMETRO -->
+    <div class="section destacado" id="bloqueAlcoholimetro">
+      <label>Alcoholímetro</label>
+
+      <div class="fila-alcoholimetro">
+        <label class="check check-chip"><span>AREC-0732</span><input type="checkbox" class="Alcoholimetro" value="AREC-0732"></label>
+        <label class="check check-chip"><span>ARSH-0149</span><input type="checkbox" class="Alcoholimetro" value="ARSH-0149"></label>
+        <label class="check check-chip"><span>ARLM-0652</span><input type="checkbox" class="Alcoholimetro" value="ARLM-0652"></label>
+      </div>
+    </div>
+
+    <!-- FINALIZA -->
+    <div id="finaliza" class="section hidden destacado">
+      <label>Resultados</label>
+      
+      
+      
+      Vehículos fiscalizados: <input type="number" id="vehiculos"><br>
+      Personas identificadas: <input type="number" id="personas"><br>
+      Test de Alómetro: <input type="number" id="testalom"><br>
+      Test Alcoholímetro: <input type="number" id="Alcotest"><br>
+      Positiva sancionable: <input type="number" id="positivaSancionable"><br>
+      Positiva no sancionable: <input type="number" id="positivaNoSancionable"><br>
+      Actas Labradas: <input type="number" id="actas"><br>
+      Requisas: <input type="number" id="Requisa"><br>
+      QRZ: <input type="number" id="qrz"><br>
+      Dominio: <input type="number" id="dominio"><br>
+
+      <label>Medidas Cautelares:</label>
+      Remisión: <input type="number" id="Remision"><br>
+      Retención: <input type="number" id="Retencion"><br>
+      Prohibición de Circulación: <input type="number" id="Prohibicion"><br>
+      Cesión de Conducción: <input type="number" id="Cesion">
+    </div>
+
+    <div id="bloqueDetalles" class="section hidden destacado">
+      <label>Detalles:</label>
+      <textarea id="detalles" rows="3"></textarea>
+    </div>
+
+    <label>Observaciones:</label>
+    <textarea id="obs" rows="3"></textarea>
+
+    <button type="button" id="btnEnviar">Enviar por WhatsApp</button>
+
+  </div>
+
+  <!-- funciones compartidas fuentes-->
+  <script src="../funciones/js/storage.js" defer></script>
+  <script src="../funciones/js/dom.js" defer></script>
+  <script src="../funciones/js/datos.js" defer></script>
+  <script src="../funciones/js/ordersSync.js" defer></script>
+  <script src="../funciones/js/uiValidacion.js" defer></script>
+
+  <!-- usuario fuente -->
+  <script src="./usuario.js" defer></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
