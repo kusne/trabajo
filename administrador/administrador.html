@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <title>Carga de Órdenes Operacionales</title>
 
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <link rel="stylesheet" href="../funciones/estilos/base.css">
   <link rel="stylesheet" href="./administrador.css">
 </head>
@@ -24,58 +26,101 @@
     <p id="loginError" style="color:red; display:none;"></p>
   </div>
 
+  <!-- APP ADM -->
   <div class="app" id="admContainer" style="display:none;">
-    <div style="text-align: right; margin-bottom: 10px;">
-      <button id="btnLogout">Cerrar sesión</button>
+
+    <div class="adm-topbar">
+      <div class="tabs">
+        <button type="button" class="tab-btn active" data-tab="ordenes">Órdenes</button>
+        <button type="button" class="tab-btn" data-tab="guardia">Guardia</button>
+      </div>
+
+      <button id="btnLogout" type="button" class="btn-logout">Cerrar sesión</button>
     </div>
 
-    <h2>Formulario de Carga de Órdenes Operacionales</h2>
+    <!-- =========================
+         TAB 1: ÓRDENES
+    ========================== -->
+    <section id="tab-ordenes" class="tab-panel">
+      <h2>Formulario de Carga de Órdenes Operacionales</h2>
 
-    <label for="numOrden">Número de Orden</label>
-    <input type="text" id="numOrden" placeholder="Ej: OOP2344/26" required>
+      <label for="numOrden">Número de Orden</label>
+      <input type="text" id="numOrden" placeholder="Ej: OOP2344/26" required>
 
-    <label for="textoRef">Texto de Referencia (opcional)</label>
-    <input type="text" id="textoRef" placeholder="Ej: Orden semanal">
+      <label for="textoRef">Texto de Referencia (opcional)</label>
+      <input type="text" id="textoRef" placeholder="Ej: Orden semanal">
 
-    <label for="fechaVigencia">Fecha de Vigencia (obligatoria)</label>
-    <input type="date" id="fechaVigencia" required>
+      <label for="fechaVigencia">Fecha de Vigencia (obligatoria)</label>
+      <input type="date" id="fechaVigencia" required>
 
-    <label for="franjas">Franjas horarias (una por línea: HORARIO - LUGAR - TÍTULO)</label>
-    <textarea id="franjas" rows="6" required
-      placeholder="01 a 06 hs - Puente Carretero Cabecera Santo Tomé - Presencia Activa
+      <label for="franjas">Franjas horarias (una por línea: HORARIO - LUGAR - TÍTULO)</label>
+      <textarea id="franjas" rows="6" required
+        placeholder="01 a 06 hs - Puente Carretero Cabecera Santo Tomé - Presencia Activa
 01 a 03 hs - RN168 KM18 - Control Vehicular"></textarea>
 
-    <div class="caducidad-container">
-      <label for="fechaCaducidad">Fecha de Caducidad (obligatoria)</label>
-      <input type="text" id="fechaCaducidad" required placeholder="DD/MM/AAAA o A FINALIZAR">
+      <div class="caducidad-container">
+        <label for="fechaCaducidad">Fecha de Caducidad (obligatoria)</label>
+        <input type="text" id="fechaCaducidad" required placeholder="DD/MM/AAAA o A FINALIZAR">
 
-      <div class="checkbox-row">
-        <label class="checkbox-container" for="aFinalizarCheckbox">
-          <input type="checkbox" id="aFinalizarCheckbox">
-          <span>A FINALIZAR</span>
-        </label>
+        <div class="checkbox-row">
+          <label class="checkbox-container" for="aFinalizarCheckbox">
+            <input type="checkbox" id="aFinalizarCheckbox">
+            <span>A FINALIZAR</span>
+          </label>
+        </div>
       </div>
-    </div>
 
-    <!-- Botones principales -->
-    <div style="display:flex; gap:10px; align-items:center;">
-      <button type="button" onclick="agregarOrden()">
-        Agregar / Actualizar Orden
-      </button>
+      <div class="acciones">
+        <button type="button" onclick="agregarOrden()">Agregar / Actualizar Orden</button>
 
-      <button type="button" id="btnPublicarOrdenes" onclick="publicarOrdenes()"
-        style="background:#2e7d32; color:white; font-weight:bold;">
-        Publicar órdenes
-      </button>
-    </div>
+        <button type="button" id="btnPublicarOrdenes" onclick="publicarOrdenes()">
+          Publicar órdenes
+        </button>
+      </div>
 
-    <hr>
+      <hr>
 
-    <h3>Órdenes Cargadas</h3>
-    <select id="ordenExistente" size="6"></select>
-    <button type="button" onclick="eliminarOrden()">Eliminar Orden Seleccionada</button>
+      <h3>Órdenes Cargadas</h3>
+      <select id="ordenExistente" size="6"></select>
 
-    <div id="infoOrden"></div>
+      <button type="button" class="btn-danger" onclick="eliminarOrden()">Eliminar Orden Seleccionada</button>
+
+      <div id="infoOrden"></div>
+    </section>
+
+    <!-- =========================
+         TAB 2: GUARDIA (placeholder)
+    ========================== -->
+    <section id="tab-guardia" class="tab-panel hidden">
+      <h2>Guardia</h2>
+
+      <div class="guardia-card">
+        <p class="muted">
+          Este es el espacio para el módulo de Guardia (Ingreso / Retiro / Patrullas / Móviles / Elementos).
+          Ya está la solapa visible. Ahora armamos el formulario y el guardado a Supabase.
+        </p>
+
+        <div class="guardia-grid">
+          <div>
+            <label>Estado</label>
+            <div class="pill">Sin implementar aún</div>
+          </div>
+
+          <div>
+            <label>Acciones</label>
+            <div class="acciones">
+              <button type="button" disabled>Ingreso</button>
+              <button type="button" disabled>Retiro</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="guardia-card">
+        <label>Salida JSON (preview)</label>
+        <textarea rows="8" readonly placeholder="Acá vamos a mostrar el JSON que se guardará..."></textarea>
+      </div>
+    </section>
 
     <!-- shared scripts (orden correcto y obligatorio) -->
     <script src="../funciones/js/storage.js"></script>
@@ -94,6 +139,7 @@
   </div>
 </body>
 </html>
+
 
 
 
