@@ -1,4 +1,3 @@
-```js
 // administrador/administrador.js
 
 // ===== PUENTE GLOBAL (NO SE ROMPE CON DOMContentLoaded NI CON PISADAS) =====
@@ -442,12 +441,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 });
-
-
-
-
-
-
 
 
 
