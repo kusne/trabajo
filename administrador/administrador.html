@@ -57,6 +57,7 @@
       </div>
     </div>
 
+    <!-- Botones principales -->
     <div style="display:flex; gap:10px; align-items:center;">
       <button type="button" onclick="agregarOrden()">
         Agregar / Actualizar Orden
@@ -75,35 +76,24 @@
     <button type="button" onclick="eliminarOrden()">Eliminar Orden Seleccionada</button>
 
     <div id="infoOrden"></div>
+
+    <!-- shared scripts (orden correcto y obligatorio) -->
+    <script src="../funciones/js/storage.js"></script>
+    <script src="../funciones/js/dom.js"></script>
+    <script src="../funciones/js/uiValidacion.js"></script>
+    <script src="../funciones/js/datos.js"></script>
+    <script src="../funciones/js/ordersSync.js"></script>
+    <script src="../funciones/js/eliminacion.js"></script>
+    <script src="../funciones/js/caducidad.js"></script>
+
+    <!-- 🔐 Supabase Auth (OBLIGATORIO PARA LOGIN) -->
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+    <!-- adm -->
+    <script src="./administrador.js"></script>
   </div>
-
-  <!-- shared scripts -->
-  <script src="../funciones/js/storage.js"></script>
-  <script src="../funciones/js/dom.js"></script>
-  <script src="../funciones/js/uiValidacion.js"></script>
-  <script src="../funciones/js/datos.js"></script>
-  <script src="../funciones/js/ordersSync.js"></script>
-  <script src="../funciones/js/eliminacion.js"></script>
-  <script src="../funciones/js/caducidad.js"></script>
-
-  <!-- Supabase -->
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-
-  <!-- adm -->
-  <script src="./administrador.js"></script>
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
 
 
 
