@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <title>Carga de Órdenes Operacionales</title>
 
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <link rel="stylesheet" href="../funciones/estilos/base.css">
   <link rel="stylesheet" href="./administrador.css">
 </head>
@@ -28,18 +30,16 @@
   <div class="app" id="admContainer" style="display:none;">
 
     <div class="topbar">
-      <div class="tabs" role="tablist" aria-label="Administrador">
-        <button type="button" class="tab-btn is-active" data-tab="ordenes" role="tab" aria-selected="true">Órdenes</button>
-        <button type="button" class="tab-btn" data-tab="guardia" role="tab" aria-selected="false">Guardia</button>
+      <div class="tabs">
+        <button type="button" class="tab-btn is-active" data-tab="ordenes">Órdenes</button>
+        <button type="button" class="tab-btn" data-tab="guardia">Guardia</button>
       </div>
 
       <button id="btnLogout" class="btn-ghost">Cerrar sesión</button>
     </div>
 
-    <!-- =========================
-         TAB: ÓRDENES
-    ========================== -->
-    <section id="tabOrdenes" class="tab-panel is-active" role="tabpanel">
+    <!-- ===================== TAB: ÓRDENES ===================== -->
+    <section id="tab-ordenes" class="tab-panel is-active">
       <h2>Formulario de Carga de Órdenes Operacionales</h2>
 
       <label for="numOrden">Número de Orden</label>
@@ -68,10 +68,12 @@
         </div>
       </div>
 
-      <div class="row-actions">
-        <button type="button" class="btn" onclick="agregarOrden()">Agregar / Actualizar Orden</button>
+      <div class="row">
+        <button type="button" class="btn-primary" onclick="agregarOrden()">
+          Agregar / Actualizar Orden
+        </button>
 
-        <button type="button" id="btnPublicarOrdenes" class="btn btn-primary" onclick="publicarOrdenes()">
+        <button type="button" id="btnPublicarOrdenes" class="btn-success" onclick="publicarOrdenes()">
           Publicar órdenes
         </button>
       </div>
@@ -79,58 +81,55 @@
       <hr>
 
       <h3>Órdenes Cargadas</h3>
-      <select id="ordenExistente" size="6"></select>
-      <button type="button" class="btn btn-danger" onclick="eliminarOrden()">Eliminar Orden Seleccionada</button>
+      <select id="ordenExistente" size="6" class="full"></select>
+      <button type="button" class="btn-danger" onclick="eliminarOrden()">Eliminar Orden Seleccionada</button>
 
       <div id="infoOrden"></div>
     </section>
 
-    <!-- =========================
-         TAB: GUARDIA
-    ========================== -->
-    <section id="tabGuardia" class="tab-panel" role="tabpanel">
+    <!-- ===================== TAB: GUARDIA ===================== -->
+    <section id="tab-guardia" class="tab-panel">
       <h2>Guardia</h2>
       <p class="muted">
-        Módulo de Guardia (Ingreso / Retiro). Por ahora guardamos un JSON único (id=1) en Supabase.
+        Módulo de Guardia (Ingreso / Retiro). Guardamos un JSON único (id=1) en Supabase.
       </p>
 
-      <div class="card">
-        <label for="guardiaLugar"><b>Lugar (desde órdenes)</b></label>
-        <select id="guardiaLugar">
-          <option value="">Seleccionar lugar</option>
-        </select>
+      <label for="guardiaLugar">Lugar (desde órdenes)</label>
+      <select id="guardiaLugar" class="full">
+        <option value="">Seleccionar lugar</option>
+      </select>
 
-        <div class="guardia-status">
-          <div>
-            <div class="muted small">Estado</div>
-            <div id="guardiaEstado" class="status-text">Cargando...</div>
-            <div class="muted small" id="guardiaFechas"></div>
-          </div>
-
-          <div class="guardia-actions">
-            <button type="button" id="btnGuardiaIngreso" class="btn btn-primary">Ingreso</button>
-            <button type="button" id="btnGuardiaRetiro" class="btn">Retiro</button>
-          </div>
+      <div class="guardia-box">
+        <div>
+          <div class="label">Estado</div>
+          <div id="guardiaEstado" class="value">Sin guardia activa</div>
         </div>
 
-        <h3>Salida JSON (preview)</h3>
-        <pre id="guardiaJsonPreview" class="json-preview">{}</pre>
+        <div class="guardia-actions">
+          <button type="button" id="btnGuardiaIngreso" class="btn-primary">Ingreso</button>
+          <button type="button" id="btnGuardiaRetiro" class="btn-ghost">Retiro</button>
+        </div>
       </div>
+
+      <h3>Salida JSON (preview)</h3>
+      <pre id="guardiaJsonPreview" class="json-preview">{}</pre>
     </section>
 
-    <!-- shared scripts (orden correcto y obligatorio) -->
+    <!-- shared scripts (orden correcto) -->
     <script src="../funciones/js/storage.js"></script>
     <script src="../funciones/js/dom.js"></script>
     <script src="../funciones/js/uiValidacion.js"></script>
     <script src="../funciones/js/datos.js"></script>
     <script src="../funciones/js/ordersSync.js"></script>
+    <script src="../funciones/js/eliminacion.js"></script>
     <script src="../funciones/js/caducidad.js"></script>
 
-    <!-- 🔐 Supabase Auth (OBLIGATORIO PARA LOGIN) -->
+    <!-- Supabase -->
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 
     <!-- adm -->
     <script src="./administrador.js"></script>
+
   </div>
 </body>
 </html>
