@@ -9,6 +9,11 @@ window.publicarOrdenes = function () {
   alert("ADM no inicializó publicarOrdenes. Hacé Ctrl+F5.");
 };
 
+window.eliminarOrden = function () {
+  if (typeof window.__adm_eliminarOrden === "function") return window.__adm_eliminarOrden();
+  alert("ADM no inicializó eliminarOrden. Hacé Ctrl+F5.");
+};
+
 console.log("ADM/administrador.js cargado OK - puente global activo");
 
 // ===== CONFIG SUPABASE (SOLO ADM) =====
@@ -35,16 +40,10 @@ function isoToLatam(iso) {
 
 function normalizarOrdenParaPublicar(o) {
   const out = { ...o };
-
-  // vigencia viene de <input type="date"> => ISO
   out.vigencia = isoToLatam(out.vigencia);
 
-  // asegurar franjas array
-  if (Array.isArray(out.franjas)) {
-    out.franjas = out.franjas.map((f) => ({ ...f }));
-  } else {
-    out.franjas = [];
-  }
+  if (Array.isArray(out.franjas)) out.franjas = out.franjas.map((f) => ({ ...f }));
+  else out.franjas = [];
 
   return out;
 }
@@ -64,16 +63,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   const loginPassword = document.getElementById("loginPassword");
   const loginError = document.getElementById("loginError");
 
-  // ===== ADM ELEMENTS (ÓRDENES) =====
-  const chkFinalizar = document.getElementById("aFinalizarCheckbox");
-  const fechaCaducidadInput = document.getElementById("fechaCaducidad");
-  const numOrdenEl = document.getElementById("numOrden");
-  const textoRefEl = document.getElementById("textoRef");
-  const franjasEl = document.getElementById("franjas");
-  const fechaVigenciaEl = document.getElementById("fechaVigencia");
-  const selectOrdenExistente = document.getElementById("ordenExistente");
-  const btnPublicar = document.getElementById("btnPublicarOrdenes");
-
   // ===== LOGOUT =====
   const btnLogout = document.getElementById("btnLogout");
   if (btnLogout) {
@@ -84,76 +73,47 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // ======================================================
-  // TABS (ÓRDENES / GUARDIA)
-  // ======================================================
-  const tabOrdenesBtn = document.getElementById("tabOrdenesBtn");
-  const tabGuardiaBtn = document.getElementById("tabGuardiaBtn");
-  const panelOrdenes = document.getElementById("panelOrdenes");
-  const panelGuardia = document.getElementById("panelGuardia");
+  // ===== TABS =====
+  const tabBtns = Array.from(document.querySelectorAll(".tab-btn"));
+  const tabOrdenes = document.getElementById("tabOrdenes");
+  const tabGuardia = document.getElementById("tabGuardia");
 
-  function activarTab(tab) {
-    const esOrdenes = tab === "ordenes";
-
-    if (panelOrdenes) panelOrdenes.classList.toggle("hidden", !esOrdenes);
-    if (panelGuardia) panelGuardia.classList.toggle("hidden", esOrdenes);
-
-    if (tabOrdenesBtn) tabOrdenesBtn.classList.toggle("active", esOrdenes);
-    if (tabGuardiaBtn) tabGuardiaBtn.classList.toggle("active", !esOrdenes);
+  function setTab(name) {
+    tabBtns.forEach((b) => {
+      const is = b.dataset.tab === name;
+      b.classList.toggle("is-active", is);
+      b.setAttribute("aria-selected", is ? "true" : "false");
+    });
+    if (tabOrdenes) tabOrdenes.classList.toggle("is-active", name === "ordenes");
+    if (tabGuardia) tabGuardia.classList.toggle("is-active", name === "guardia");
   }
 
-  if (tabOrdenesBtn) tabOrdenesBtn.addEventListener("click", () => activarTab("ordenes"));
-  if (tabGuardiaBtn) tabGuardiaBtn.addEventListener("click", () => activarTab("guardia"));
-
-  // Default
-  activarTab("ordenes");
+  tabBtns.forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
 
   // ======================================================
-  // GUARDIA: SELECTOR DE LUGARES DESDE ÓRDENES
+  // ÓRDENES: DOM
+  // ======================================================
+  const chkFinalizar = document.getElementById("aFinalizarCheckbox");
+  const fechaCaducidadInput = document.getElementById("fechaCaducidad");
+  const numOrdenEl = document.getElementById("numOrden");
+  const textoRefEl = document.getElementById("textoRef");
+  const franjasEl = document.getElementById("franjas");
+  const fechaVigenciaEl = document.getElementById("fechaVigencia");
+  const selectOrdenExistente = document.getElementById("ordenExistente");
+  const btnPublicar = document.getElementById("btnPublicarOrdenes");
+
+  // ======================================================
+  // GUARDIA: DOM
   // ======================================================
   const selGuardiaLugar = document.getElementById("guardiaLugar");
-  const btnRefrescarLugares = document.getElementById("btnRefrescarLugares");
-
-  function extraerLugaresDesdeOrdenes() {
-    if (typeof StorageApp === "undefined" || !StorageApp.cargarOrdenes) return [];
-    const ordenes = StorageApp.cargarOrdenes();
-    if (!Array.isArray(ordenes)) return [];
-
-    const set = new Set();
-    for (const o of ordenes) {
-      const franjas = Array.isArray(o?.franjas) ? o.franjas : [];
-      for (const f of franjas) {
-        const lugar = String(f?.lugar || "").trim();
-        if (lugar) set.add(lugar);
-      }
-    }
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
-  }
-
-  function cargarLugaresEnSelector() {
-    if (!selGuardiaLugar) return;
-
-    const lugares = extraerLugaresDesdeOrdenes();
-
-    selGuardiaLugar.innerHTML = '<option value="">Seleccionar lugar</option>';
-    for (const lugar of lugares) {
-      const opt = document.createElement("option");
-      opt.value = lugar;
-      opt.textContent = lugar;
-      selGuardiaLugar.appendChild(opt);
-    }
-
-    console.log("[GUARDIA] Lugares cargados:", lugares.length, lugares);
-  }
-
-  if (btnRefrescarLugares) {
-    btnRefrescarLugares.addEventListener("click", () => {
-      cargarLugaresEnSelector();
-    });
-  }
+  const elGuardiaEstado = document.getElementById("guardiaEstado");
+  const elGuardiaFechas = document.getElementById("guardiaFechas");
+  const elGuardiaJson = document.getElementById("guardiaJsonPreview");
+  const btnGuardiaIngreso = document.getElementById("btnGuardiaIngreso");
+  const btnGuardiaRetiro = document.getElementById("btnGuardiaRetiro");
 
   // ======================================================
-  // ESTADO DE CAMBIOS / PUBLICACIÓN
+  // ESTADO DE CAMBIOS / PUBLICACIÓN (ÓRDENES)
   // ======================================================
   let cambiosId = 0;
   let ultimoPublicadoId = 0;
@@ -199,7 +159,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ======================================================
   // SELECTOR: ACTUALIZAR LISTA DE ÓRDENES
   // ======================================================
-  function actualizarSelector() {
+  function actualizarSelectorOrdenes() {
     if (!selectOrdenExistente) return;
 
     if (typeof StorageApp === "undefined" || !StorageApp.cargarOrdenes) {
@@ -227,9 +187,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // ======================================================
-  // LIMPIAR CAMPOS
+  // LIMPIAR CAMPOS (ÓRDENES)
   // ======================================================
-  function limpiarCampos() {
+  function limpiarCamposOrdenes() {
     if (numOrdenEl) numOrdenEl.value = "";
     if (textoRefEl) textoRefEl.value = "";
     if (franjasEl) franjasEl.value = "";
@@ -286,16 +246,15 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     StorageApp.guardarOrdenes(ordenes);
 
-    actualizarSelector();
-    limpiarCampos();
+    actualizarSelectorOrdenes();
+    limpiarCamposOrdenes();
     marcarCambio();
 
-    // refresca lugares por si cambió algo
-    cargarLugaresEnSelector();
+    // refrescar lugares para guardia
+    cargarLugaresDesdeOrdenes();
 
     alert("Orden guardada.");
   }
-
   window.__adm_agregarOrden = agregarOrden;
 
   // ======================================================
@@ -315,7 +274,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     selectOrdenExistente.addEventListener("change", () => {
       const v = selectOrdenExistente.value;
       if (v === "") {
-        limpiarCampos();
+        limpiarCamposOrdenes();
         return;
       }
 
@@ -361,8 +320,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!o) {
       alert("La orden seleccionada no existe (puede haber cambiado).");
       ordenSeleccionadaIdx = null;
-      actualizarSelector();
-      limpiarCampos();
+      actualizarSelectorOrdenes();
+      limpiarCamposOrdenes();
       return;
     }
 
@@ -373,17 +332,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     StorageApp.guardarOrdenes(ordenes);
 
     ordenSeleccionadaIdx = null;
-    limpiarCampos();
-    actualizarSelector();
+    limpiarCamposOrdenes();
+    actualizarSelectorOrdenes();
     marcarCambio();
 
-    // refresca lugares por si quedó alguno sin uso
-    cargarLugaresEnSelector();
+    // refrescar lugares para guardia
+    cargarLugaresDesdeOrdenes();
 
     alert("Orden eliminada.");
   }
-
-  window.eliminarOrden = eliminarOrden;
+  window.__adm_eliminarOrden = eliminarOrden;
 
   // ======================================================
   // PUBLICAR ÓRDENES
@@ -400,8 +358,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     const ordenes = StorageApp.cargarOrdenes();
-    console.log("[ADM] Ordenes local:", Array.isArray(ordenes) ? ordenes.length : "no-array", ordenes?.[0]);
-
     const payloadPublicar = Array.isArray(ordenes) ? ordenes.map(normalizarOrdenParaPublicar) : [];
 
     const { data: { session }, error: sessionErr } = await supabaseClient.auth.getSession();
@@ -436,21 +392,201 @@ document.addEventListener("DOMContentLoaded", async () => {
     actualizarEstadoPublicar();
     alert("Órdenes publicadas.");
   }
-
   window.__adm_publicarOrdenes = publicarOrdenes;
+
+  // ======================================================
+  // GUARDIA: LUGARES DESDE ÓRDENES
+  // ======================================================
+  function normalizarLugarTexto(s) {
+    return String(s || "").trim().replace(/\s+/g, " ");
+  }
+
+  function cargarLugaresDesdeOrdenes() {
+    if (!selGuardiaLugar) return;
+
+    let ordenes = [];
+    try {
+      ordenes = StorageApp?.cargarOrdenes?.() || [];
+    } catch (e) {
+      ordenes = [];
+    }
+
+    const set = new Set();
+
+    ordenes.forEach((o) => {
+      (o?.franjas || []).forEach((f) => {
+        const lug = normalizarLugarTexto(f?.lugar);
+        if (lug) set.add(lug);
+      });
+    });
+
+    const lugares = Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
+
+    const actual = selGuardiaLugar.value || "";
+
+    selGuardiaLugar.innerHTML = "";
+    const opt0 = document.createElement("option");
+    opt0.value = "";
+    opt0.textContent = "Seleccionar lugar";
+    selGuardiaLugar.appendChild(opt0);
+
+    lugares.forEach((l) => {
+      const op = document.createElement("option");
+      op.value = l;
+      op.textContent = l;
+      selGuardiaLugar.appendChild(op);
+    });
+
+    // intentar mantener selección
+    if (actual && lugares.includes(actual)) selGuardiaLugar.value = actual;
+  }
+
+  // ======================================================
+  // GUARDIA: STORAGE EN SUPABASE (tabla guardia_store id=1)
+  // ======================================================
+  let guardiaActual = null; // { active, lugar, ingreso_ts, retiro_ts, patrullas:[] }
+
+  function renderGuardia() {
+    if (!elGuardiaEstado || !btnGuardiaIngreso || !btnGuardiaRetiro || !elGuardiaJson) return;
+
+    const g = guardiaActual;
+
+    if (!g || !g.active) {
+      elGuardiaEstado.textContent = "Sin guardia activa";
+      if (elGuardiaFechas) elGuardiaFechas.textContent = "";
+      btnGuardiaIngreso.disabled = false;
+      btnGuardiaRetiro.disabled = true;
+      elGuardiaJson.textContent = JSON.stringify(g || {}, null, 2);
+      return;
+    }
+
+    elGuardiaEstado.textContent = `Guardia activa en: ${g.lugar || "(sin lugar)"}`;
+
+    const inTxt = g.ingreso_ts ? new Date(g.ingreso_ts).toLocaleString("es-AR") : "-";
+    const outTxt = g.retiro_ts ? new Date(g.retiro_ts).toLocaleString("es-AR") : "-";
+    if (elGuardiaFechas) elGuardiaFechas.textContent = `Ingreso: ${inTxt}  |  Retiro: ${outTxt}`;
+
+    btnGuardiaIngreso.disabled = true;
+    btnGuardiaRetiro.disabled = false;
+
+    elGuardiaJson.textContent = JSON.stringify(g, null, 2);
+  }
+
+  async function leerGuardiaServidor() {
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/guardia_store?select=payload,updated_at&id=eq.1&limit=1`, {
+        headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" },
+      });
+
+      if (!r.ok) {
+        console.warn("[ADM] leerGuardiaServidor status:", r.status, await r.text());
+        guardiaActual = null;
+        renderGuardia();
+        return;
+      }
+
+      const data = await r.json();
+      const payload = data?.[0]?.payload || null;
+      guardiaActual = payload;
+      renderGuardia();
+    } catch (e) {
+      console.warn("[ADM] Error leyendo guardia_store:", e);
+      guardiaActual = null;
+      renderGuardia();
+    }
+  }
+
+  async function guardarGuardiaServidor(payload) {
+    const { data: { session }, error: sessionErr } = await supabaseClient.auth.getSession();
+    if (sessionErr || !session?.access_token) {
+      alert("No hay sesión iniciada. Inicie sesión antes de guardar Guardia.");
+      return false;
+    }
+
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/guardia_store?id=eq.1&select=id,updated_at`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Prefer: "return=representation",
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: "Bearer " + session.access_token,
+      },
+      body: JSON.stringify({ payload, updated_at: new Date().toISOString() }),
+    });
+
+    const txt = await resp.text();
+    console.log("[ADM] Guardia PATCH status:", resp.status);
+    console.log("[ADM] Guardia PATCH body:", txt);
+
+    if (!resp.ok) {
+      alert("Error guardando Guardia. Mirá Console (F12). Status: " + resp.status);
+      return false;
+    }
+
+    return true;
+  }
+
+  async function ingresoGuardia() {
+    const lugar = normalizarLugarTexto(selGuardiaLugar?.value || "");
+    if (!lugar) return alert("Seleccioná un lugar para Ingreso.");
+
+    if (guardiaActual?.active) {
+      return alert(`Ya hay una guardia activa en: ${guardiaActual.lugar || "(sin lugar)"}`);
+    }
+
+    const now = new Date().toISOString();
+    const payload = {
+      active: true,
+      lugar,
+      ingreso_ts: now,
+      retiro_ts: null,
+      patrullas: [], // (próximo paso)
+    };
+
+    const ok = await guardarGuardiaServidor(payload);
+    if (!ok) return;
+
+    guardiaActual = payload;
+    renderGuardia();
+    alert("Ingreso de guardia registrado.");
+  }
+
+  async function retiroGuardia() {
+    if (!guardiaActual?.active) return alert("No hay guardia activa para retirar.");
+
+    const now = new Date().toISOString();
+    const payload = {
+      ...guardiaActual,
+      active: false,
+      retiro_ts: now,
+    };
+
+    const ok = await guardarGuardiaServidor(payload);
+    if (!ok) return;
+
+    guardiaActual = payload;
+    renderGuardia();
+    alert("Retiro de guardia registrado.");
+  }
+
+  if (btnGuardiaIngreso) btnGuardiaIngreso.addEventListener("click", ingresoGuardia);
+  if (btnGuardiaRetiro) btnGuardiaRetiro.addEventListener("click", retiroGuardia);
 
   // ======================================================
   // CONTROL DE SESIÓN + INIT
   // ======================================================
   function initAdm() {
     limpiarOrdenesCaducadas();
-    actualizarSelector();
+    actualizarSelectorOrdenes();
     cambiosId = 0;
     ultimoPublicadoId = 0;
     actualizarEstadoPublicar();
 
-    // carga lugares también
-    cargarLugaresEnSelector();
+    // Guardia
+    cargarLugaresDesdeOrdenes();
+    leerGuardiaServidor();
+    renderGuardia();
   }
 
   const { data: { session }, error } = await supabaseClient.auth.getSession();
