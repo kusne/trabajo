@@ -27,6 +27,7 @@ if (!window.supabase || typeof window.supabase.createClient !== "function") {
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 function isoToLatam(iso) {
+  // "2026-01-20" -> "20/01/2026"
   const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return iso || "";
   return `${m[3]}/${m[2]}/${m[1]}`;
@@ -34,39 +35,27 @@ function isoToLatam(iso) {
 
 function normalizarOrdenParaPublicar(o) {
   const out = { ...o };
+
+  // vigencia viene de <input type="date"> => ISO
   out.vigencia = isoToLatam(out.vigencia);
 
+  // asegurar franjas array
   if (Array.isArray(out.franjas)) {
     out.franjas = out.franjas.map((f) => ({ ...f }));
   } else {
     out.franjas = [];
   }
+
   return out;
 }
 
+// ======================================================
+// TODO EL CÓDIGO DEPENDIENTE DEL DOM VA ACÁ
+// ======================================================
 document.addEventListener("DOMContentLoaded", async () => {
   // ===== CONTENEDORES LOGIN / ADM =====
   const loginContainer = document.getElementById("loginContainer");
   const admContainer = document.getElementById("admContainer");
-
-  // ===== TABS =====
-  const tabBtns = Array.from(document.querySelectorAll(".tab-btn"));
-  const tabOrdenes = document.getElementById("tab-ordenes");
-  const tabGuardia = document.getElementById("tab-guardia");
-
-  function setTab(name) {
-    // name: "ordenes" | "guardia"
-    tabBtns.forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
-    if (tabOrdenes) tabOrdenes.classList.toggle("hidden", name !== "ordenes");
-    if (tabGuardia) tabGuardia.classList.toggle("hidden", name !== "guardia");
-  }
-
-  tabBtns.forEach((b) => {
-    b.addEventListener("click", () => setTab(b.dataset.tab));
-  });
-
-  // default
-  setTab("ordenes");
 
   // ===== LOGIN ELEMENTS =====
   const btnLogin = document.getElementById("btnLogin");
@@ -75,7 +64,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const loginPassword = document.getElementById("loginPassword");
   const loginError = document.getElementById("loginError");
 
-  // ===== ADM ELEMENTS =====
+  // ===== ADM ELEMENTS (ÓRDENES) =====
   const chkFinalizar = document.getElementById("aFinalizarCheckbox");
   const fechaCaducidadInput = document.getElementById("fechaCaducidad");
   const numOrdenEl = document.getElementById("numOrden");
@@ -92,6 +81,74 @@ document.addEventListener("DOMContentLoaded", async () => {
       await supabaseClient.auth.signOut();
       if (admContainer) admContainer.style.display = "none";
       if (loginContainer) loginContainer.style.display = "block";
+    });
+  }
+
+  // ======================================================
+  // TABS (ÓRDENES / GUARDIA)
+  // ======================================================
+  const tabOrdenesBtn = document.getElementById("tabOrdenesBtn");
+  const tabGuardiaBtn = document.getElementById("tabGuardiaBtn");
+  const panelOrdenes = document.getElementById("panelOrdenes");
+  const panelGuardia = document.getElementById("panelGuardia");
+
+  function activarTab(tab) {
+    const esOrdenes = tab === "ordenes";
+
+    if (panelOrdenes) panelOrdenes.classList.toggle("hidden", !esOrdenes);
+    if (panelGuardia) panelGuardia.classList.toggle("hidden", esOrdenes);
+
+    if (tabOrdenesBtn) tabOrdenesBtn.classList.toggle("active", esOrdenes);
+    if (tabGuardiaBtn) tabGuardiaBtn.classList.toggle("active", !esOrdenes);
+  }
+
+  if (tabOrdenesBtn) tabOrdenesBtn.addEventListener("click", () => activarTab("ordenes"));
+  if (tabGuardiaBtn) tabGuardiaBtn.addEventListener("click", () => activarTab("guardia"));
+
+  // Default
+  activarTab("ordenes");
+
+  // ======================================================
+  // GUARDIA: SELECTOR DE LUGARES DESDE ÓRDENES
+  // ======================================================
+  const selGuardiaLugar = document.getElementById("guardiaLugar");
+  const btnRefrescarLugares = document.getElementById("btnRefrescarLugares");
+
+  function extraerLugaresDesdeOrdenes() {
+    if (typeof StorageApp === "undefined" || !StorageApp.cargarOrdenes) return [];
+    const ordenes = StorageApp.cargarOrdenes();
+    if (!Array.isArray(ordenes)) return [];
+
+    const set = new Set();
+    for (const o of ordenes) {
+      const franjas = Array.isArray(o?.franjas) ? o.franjas : [];
+      for (const f of franjas) {
+        const lugar = String(f?.lugar || "").trim();
+        if (lugar) set.add(lugar);
+      }
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
+  }
+
+  function cargarLugaresEnSelector() {
+    if (!selGuardiaLugar) return;
+
+    const lugares = extraerLugaresDesdeOrdenes();
+
+    selGuardiaLugar.innerHTML = '<option value="">Seleccionar lugar</option>';
+    for (const lugar of lugares) {
+      const opt = document.createElement("option");
+      opt.value = lugar;
+      opt.textContent = lugar;
+      selGuardiaLugar.appendChild(opt);
+    }
+
+    console.log("[GUARDIA] Lugares cargados:", lugares.length, lugares);
+  }
+
+  if (btnRefrescarLugares) {
+    btnRefrescarLugares.addEventListener("click", () => {
+      cargarLugaresEnSelector();
     });
   }
 
@@ -233,6 +290,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     limpiarCampos();
     marcarCambio();
 
+    // refresca lugares por si cambió algo
+    cargarLugaresEnSelector();
+
     alert("Orden guardada.");
   }
 
@@ -317,6 +377,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     actualizarSelector();
     marcarCambio();
 
+    // refresca lugares por si quedó alguno sin uso
+    cargarLugaresEnSelector();
+
     alert("Orden eliminada.");
   }
 
@@ -337,6 +400,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     const ordenes = StorageApp.cargarOrdenes();
+    console.log("[ADM] Ordenes local:", Array.isArray(ordenes) ? ordenes.length : "no-array", ordenes?.[0]);
+
     const payloadPublicar = Array.isArray(ordenes) ? ordenes.map(normalizarOrdenParaPublicar) : [];
 
     const { data: { session }, error: sessionErr } = await supabaseClient.auth.getSession();
@@ -383,6 +448,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     cambiosId = 0;
     ultimoPublicadoId = 0;
     actualizarEstadoPublicar();
+
+    // carga lugares también
+    cargarLugaresEnSelector();
   }
 
   const { data: { session }, error } = await supabaseClient.auth.getSession();
@@ -450,4 +518,3 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 });
-
