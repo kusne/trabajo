@@ -9,11 +9,6 @@ window.publicarOrdenes = function () {
   alert("ADM no inicializó publicarOrdenes. Hacé Ctrl+F5.");
 };
 
-window.eliminarOrden = function () {
-  if (typeof window.__adm_eliminarOrden === "function") return window.__adm_eliminarOrden();
-  alert("ADM no inicializó eliminarOrden. Hacé Ctrl+F5.");
-};
-
 console.log("ADM/administrador.js cargado OK - puente global activo");
 
 // ===== CONFIG SUPABASE (SOLO ADM) =====
@@ -22,9 +17,7 @@ const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
 // Guard REAL: si el HTML no cargó el CDN de supabase antes, CORTAMOS para evitar crash
 if (!window.supabase || typeof window.supabase.createClient !== "function") {
-  console.error(
-    "Supabase no está cargado. Verificá en el HTML: <script src='https://unpkg.com/@supabase/supabase-js@2'></script> antes de administrador.js"
-  );
+  console.error("Supabase no está cargado. Verificá el orden de scripts (CDN antes que administrador.js)");
   alert("Error: Supabase no está cargado. Revisá el orden de scripts.");
   throw new Error("Supabase no está cargado");
 }
@@ -41,16 +34,11 @@ function isoToLatam(iso) {
 function normalizarOrdenParaPublicar(o) {
   const out = { ...o };
   out.vigencia = isoToLatam(out.vigencia);
-
   if (Array.isArray(out.franjas)) out.franjas = out.franjas.map((f) => ({ ...f }));
   else out.franjas = [];
-
   return out;
 }
 
-// ======================================================
-// TODO EL CÓDIGO DEPENDIENTE DEL DOM VA ACÁ
-// ======================================================
 document.addEventListener("DOMContentLoaded", async () => {
   // ===== CONTENEDORES LOGIN / ADM =====
   const loginContainer = document.getElementById("loginContainer");
@@ -63,36 +51,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   const loginPassword = document.getElementById("loginPassword");
   const loginError = document.getElementById("loginError");
 
-  // ===== LOGOUT =====
-  const btnLogout = document.getElementById("btnLogout");
-  if (btnLogout) {
-    btnLogout.addEventListener("click", async () => {
-      await supabaseClient.auth.signOut();
-      if (admContainer) admContainer.style.display = "none";
-      if (loginContainer) loginContainer.style.display = "block";
-    });
-  }
-
   // ===== TABS =====
   const tabBtns = Array.from(document.querySelectorAll(".tab-btn"));
-  const tabOrdenes = document.getElementById("tabOrdenes");
-  const tabGuardia = document.getElementById("tabGuardia");
+  const tabPanels = {
+    ordenes: document.getElementById("tab-ordenes"),
+    guardia: document.getElementById("tab-guardia"),
+  };
 
-  function setTab(name) {
-    tabBtns.forEach((b) => {
-      const is = b.dataset.tab === name;
-      b.classList.toggle("is-active", is);
-      b.setAttribute("aria-selected", is ? "true" : "false");
-    });
-    if (tabOrdenes) tabOrdenes.classList.toggle("is-active", name === "ordenes");
-    if (tabGuardia) tabGuardia.classList.toggle("is-active", name === "guardia");
+  function activarTab(nombre) {
+    tabBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.tab === nombre));
+    Object.keys(tabPanels).forEach((k) => tabPanels[k]?.classList.toggle("is-active", k === nombre));
   }
 
-  tabBtns.forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+  tabBtns.forEach((b) => b.addEventListener("click", () => activarTab(b.dataset.tab)));
 
-  // ======================================================
-  // ÓRDENES: DOM
-  // ======================================================
+  // ===== ADM ELEMENTS (ÓRDENES) =====
   const chkFinalizar = document.getElementById("aFinalizarCheckbox");
   const fechaCaducidadInput = document.getElementById("fechaCaducidad");
   const numOrdenEl = document.getElementById("numOrden");
@@ -102,15 +75,22 @@ document.addEventListener("DOMContentLoaded", async () => {
   const selectOrdenExistente = document.getElementById("ordenExistente");
   const btnPublicar = document.getElementById("btnPublicarOrdenes");
 
-  // ======================================================
-  // GUARDIA: DOM
-  // ======================================================
-  const selGuardiaLugar = document.getElementById("guardiaLugar");
-  const elGuardiaEstado = document.getElementById("guardiaEstado");
-  const elGuardiaFechas = document.getElementById("guardiaFechas");
-  const elGuardiaJson = document.getElementById("guardiaJsonPreview");
-  const btnGuardiaIngreso = document.getElementById("btnGuardiaIngreso");
-  const btnGuardiaRetiro = document.getElementById("btnGuardiaRetiro");
+  // ===== ADM ELEMENTS (GUARDIA) =====
+  const selLugarGuardia = document.getElementById("guardiaLugar");
+  const elEstadoGuardia = document.getElementById("guardiaEstado");
+  const preGuardia = document.getElementById("guardiaJsonPreview");
+  const btnIngreso = document.getElementById("btnGuardiaIngreso");
+  const btnRetiro = document.getElementById("btnGuardiaRetiro");
+
+  // ===== LOGOUT =====
+  const btnLogout = document.getElementById("btnLogout");
+  if (btnLogout) {
+    btnLogout.addEventListener("click", async () => {
+      await supabaseClient.auth.signOut();
+      if (admContainer) admContainer.style.display = "none";
+      if (loginContainer) loginContainer.style.display = "block";
+    });
+  }
 
   // ======================================================
   // ESTADO DE CAMBIOS / PUBLICACIÓN (ÓRDENES)
@@ -157,9 +137,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // ======================================================
-  // SELECTOR: ACTUALIZAR LISTA DE ÓRDENES
+  // SELECTOR ÓRDENES
   // ======================================================
-  function actualizarSelectorOrdenes() {
+  function actualizarSelector() {
     if (!selectOrdenExistente) return;
 
     if (typeof StorageApp === "undefined" || !StorageApp.cargarOrdenes) {
@@ -186,10 +166,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     selectOrdenExistente.value = "";
   }
 
-  // ======================================================
-  // LIMPIAR CAMPOS (ÓRDENES)
-  // ======================================================
-  function limpiarCamposOrdenes() {
+  function limpiarCampos() {
     if (numOrdenEl) numOrdenEl.value = "";
     if (textoRefEl) textoRefEl.value = "";
     if (franjasEl) franjasEl.value = "";
@@ -200,9 +177,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (selectOrdenExistente) selectOrdenExistente.value = "";
   }
 
-  // ======================================================
-  // LIMPIAR ÓRDENES CADUCADAS
-  // ======================================================
   function limpiarOrdenesCaducadas() {
     if (typeof StorageApp === "undefined" || !StorageApp.cargarOrdenes || !StorageApp.guardarOrdenes) return;
     if (typeof OrdersSync === "undefined" || !OrdersSync.filtrarCaducadas) return;
@@ -246,15 +220,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     StorageApp.guardarOrdenes(ordenes);
 
-    actualizarSelectorOrdenes();
-    limpiarCamposOrdenes();
+    actualizarSelector();
+    limpiarCampos();
     marcarCambio();
 
-    // refrescar lugares para guardia
-    cargarLugaresDesdeOrdenes();
+    // refresca lugares (Guardia) por si agregaste una orden nueva
+    cargarLugaresGuardia();
 
     alert("Orden guardada.");
   }
+
   window.__adm_agregarOrden = agregarOrden;
 
   // ======================================================
@@ -274,7 +249,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     selectOrdenExistente.addEventListener("change", () => {
       const v = selectOrdenExistente.value;
       if (v === "") {
-        limpiarCamposOrdenes();
+        limpiarCampos();
         return;
       }
 
@@ -301,7 +276,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // ======================================================
-  // ELIMINAR ORDEN (con confirmación)
+  // ELIMINAR ORDEN
   // ======================================================
   function eliminarOrden() {
     if (ordenSeleccionadaIdx === null || ordenSeleccionadaIdx === undefined) {
@@ -320,8 +295,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!o) {
       alert("La orden seleccionada no existe (puede haber cambiado).");
       ordenSeleccionadaIdx = null;
-      actualizarSelectorOrdenes();
-      limpiarCamposOrdenes();
+      actualizarSelector();
+      limpiarCampos();
       return;
     }
 
@@ -332,16 +307,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     StorageApp.guardarOrdenes(ordenes);
 
     ordenSeleccionadaIdx = null;
-    limpiarCamposOrdenes();
-    actualizarSelectorOrdenes();
+    limpiarCampos();
+    actualizarSelector();
     marcarCambio();
 
-    // refrescar lugares para guardia
-    cargarLugaresDesdeOrdenes();
+    // refresca lugares (Guardia) por si borraste un lugar
+    cargarLugaresGuardia();
 
     alert("Orden eliminada.");
   }
-  window.__adm_eliminarOrden = eliminarOrden;
+
+  window.eliminarOrden = eliminarOrden;
 
   // ======================================================
   // PUBLICAR ÓRDENES
@@ -362,12 +338,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const { data: { session }, error: sessionErr } = await supabaseClient.auth.getSession();
     if (sessionErr || !session?.access_token) {
-      console.error("[ADM] No hay sesión válida:", sessionErr);
       alert("No hay sesión iniciada. Inicie sesión antes de publicar.");
       return;
     }
 
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/ordenes_store?id=eq.1&select=id,updated_at`, {
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/ordenes_store?id=eq.1`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
@@ -379,11 +354,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       body: JSON.stringify({ payload: payloadPublicar, updated_at: new Date().toISOString() }),
     });
 
-    const txt = await resp.text();
-    console.log("[ADM] PATCH status:", resp.status);
-    console.log("[ADM] PATCH body:", txt);
-
     if (!resp.ok) {
+      const txt = await resp.text();
+      console.error("[ADM] Publicar órdenes error:", resp.status, txt);
       alert("Error publicando. Mirá Console (F12). Status: " + resp.status);
       return;
     }
@@ -392,201 +365,190 @@ document.addEventListener("DOMContentLoaded", async () => {
     actualizarEstadoPublicar();
     alert("Órdenes publicadas.");
   }
+
   window.__adm_publicarOrdenes = publicarOrdenes;
 
   // ======================================================
-  // GUARDIA: LUGARES DESDE ÓRDENES
+  // ====== GUARDIA (Ingreso / Retiro) =====================
   // ======================================================
-  function normalizarLugarTexto(s) {
-    return String(s || "").trim().replace(/\s+/g, " ");
+  let guardiaState = null; // payload actual
+
+  function normalizarLugar(l) {
+    return String(l || "").trim().replace(/\s+/g, " ");
   }
 
-  function cargarLugaresDesdeOrdenes() {
-    if (!selGuardiaLugar) return;
-
-    let ordenes = [];
-    try {
-      ordenes = StorageApp?.cargarOrdenes?.() || [];
-    } catch (e) {
-      ordenes = [];
-    }
-
+  function lugaresDesdeOrdenes() {
+    if (typeof StorageApp === "undefined" || !StorageApp.cargarOrdenes) return [];
+    const ordenes = StorageApp.cargarOrdenes();
     const set = new Set();
 
-    ordenes.forEach((o) => {
+    (ordenes || []).forEach((o) => {
       (o?.franjas || []).forEach((f) => {
-        const lug = normalizarLugarTexto(f?.lugar);
+        const lug = normalizarLugar(f?.lugar);
         if (lug) set.add(lug);
       });
     });
 
-    const lugares = Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
+  }
 
-    const actual = selGuardiaLugar.value || "";
+  function cargarLugaresGuardia() {
+    if (!selLugarGuardia) return;
+    const lugares = lugaresDesdeOrdenes();
 
-    selGuardiaLugar.innerHTML = "";
-    const opt0 = document.createElement("option");
-    opt0.value = "";
-    opt0.textContent = "Seleccionar lugar";
-    selGuardiaLugar.appendChild(opt0);
-
+    const actual = selLugarGuardia.value || "";
+    selLugarGuardia.innerHTML = `<option value="">Seleccionar lugar</option>`;
     lugares.forEach((l) => {
-      const op = document.createElement("option");
-      op.value = l;
-      op.textContent = l;
-      selGuardiaLugar.appendChild(op);
+      const opt = document.createElement("option");
+      opt.value = l;
+      opt.textContent = l;
+      selLugarGuardia.appendChild(opt);
     });
 
     // intentar mantener selección
-    if (actual && lugares.includes(actual)) selGuardiaLugar.value = actual;
+    if (actual && lugares.includes(actual)) selLugarGuardia.value = actual;
+    else if (guardiaState?.lugar && lugares.includes(guardiaState.lugar)) selLugarGuardia.value = guardiaState.lugar;
   }
 
-  // ======================================================
-  // GUARDIA: STORAGE EN SUPABASE (tabla guardia_store id=1)
-  // ======================================================
-  let guardiaActual = null; // { active, lugar, ingreso_ts, retiro_ts, patrullas:[] }
-
   function renderGuardia() {
-    if (!elGuardiaEstado || !btnGuardiaIngreso || !btnGuardiaRetiro || !elGuardiaJson) return;
+    if (preGuardia) preGuardia.textContent = JSON.stringify(guardiaState || {}, null, 2);
 
-    const g = guardiaActual;
+    const active = !!guardiaState?.active;
 
-    if (!g || !g.active) {
-      elGuardiaEstado.textContent = "Sin guardia activa";
-      if (elGuardiaFechas) elGuardiaFechas.textContent = "";
-      btnGuardiaIngreso.disabled = false;
-      btnGuardiaRetiro.disabled = true;
-      elGuardiaJson.textContent = JSON.stringify(g || {}, null, 2);
+    if (elEstadoGuardia) {
+      if (!guardiaState) elEstadoGuardia.textContent = "Sin guardia activa";
+      else if (active) elEstadoGuardia.textContent = `Activa — ${guardiaState.lugar || "Sin lugar"} (Ingreso ${guardiaState.ingreso_ts || ""})`;
+      else elEstadoGuardia.textContent = `Finalizada — ${guardiaState.lugar || "Sin lugar"} (Retiro ${guardiaState.retiro_ts || ""})`;
+    }
+
+    if (btnIngreso) btnIngreso.disabled = active;      // no permitir 2 guardias activas
+    if (btnRetiro) btnRetiro.disabled = !active;       // retiro solo si está activa
+  }
+
+  async function getSessionOrFail() {
+    const { data: { session }, error } = await supabaseClient.auth.getSession();
+    if (error || !session?.access_token) return null;
+    return session;
+  }
+
+  // LEE guardia actual
+  async function cargarGuardiaDesdeServidor() {
+    const session = await getSessionOrFail();
+    if (!session) return; // si no hay sesión, no rompemos
+
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/guardia_store?select=payload&id=eq.1&limit=1`, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Accept: "application/json",
+        Authorization: "Bearer " + session.access_token,
+      },
+    });
+
+    if (!r.ok) {
+      const txt = await r.text();
+      console.warn("[ADM] No se pudo leer guardia_store:", r.status, txt);
       return;
     }
 
-    elGuardiaEstado.textContent = `Guardia activa en: ${g.lugar || "(sin lugar)"}`;
-
-    const inTxt = g.ingreso_ts ? new Date(g.ingreso_ts).toLocaleString("es-AR") : "-";
-    const outTxt = g.retiro_ts ? new Date(g.retiro_ts).toLocaleString("es-AR") : "-";
-    if (elGuardiaFechas) elGuardiaFechas.textContent = `Ingreso: ${inTxt}  |  Retiro: ${outTxt}`;
-
-    btnGuardiaIngreso.disabled = true;
-    btnGuardiaRetiro.disabled = false;
-
-    elGuardiaJson.textContent = JSON.stringify(g, null, 2);
+    const data = await r.json();
+    const payload = data?.[0]?.payload || null;
+    guardiaState = payload;
+    cargarLugaresGuardia();
+    renderGuardia();
   }
 
-  async function leerGuardiaServidor() {
-    try {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/guardia_store?select=payload,updated_at&id=eq.1&limit=1`, {
-        headers: { apikey: SUPABASE_ANON_KEY, Accept: "application/json" },
-      });
-
-      if (!r.ok) {
-        console.warn("[ADM] leerGuardiaServidor status:", r.status, await r.text());
-        guardiaActual = null;
-        renderGuardia();
-        return;
-      }
-
-      const data = await r.json();
-      const payload = data?.[0]?.payload || null;
-      guardiaActual = payload;
-      renderGuardia();
-    } catch (e) {
-      console.warn("[ADM] Error leyendo guardia_store:", e);
-      guardiaActual = null;
-      renderGuardia();
-    }
-  }
-
-  async function guardarGuardiaServidor(payload) {
-    const { data: { session }, error: sessionErr } = await supabaseClient.auth.getSession();
-    if (sessionErr || !session?.access_token) {
-      alert("No hay sesión iniciada. Inicie sesión antes de guardar Guardia.");
+  // GUARDA guardia (UPSERT)
+  async function guardarGuardiaEnServidor(payload) {
+    const session = await getSessionOrFail();
+    if (!session) {
+      alert("No hay sesión iniciada. Inicie sesión antes de usar Guardia.");
       return false;
     }
 
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/guardia_store?id=eq.1&select=id,updated_at`, {
-      method: "PATCH",
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/guardia_store`, {
+      method: "POST", // UPSERT
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
-        Prefer: "return=representation",
+        Prefer: "resolution=merge-duplicates,return=representation",
         apikey: SUPABASE_ANON_KEY,
         Authorization: "Bearer " + session.access_token,
       },
-      body: JSON.stringify({ payload, updated_at: new Date().toISOString() }),
+      body: JSON.stringify([{ id: 1, payload }]),
     });
 
-    const txt = await resp.text();
-    console.log("[ADM] Guardia PATCH status:", resp.status);
-    console.log("[ADM] Guardia PATCH body:", txt);
-
     if (!resp.ok) {
+      const txt = await resp.text();
+      console.error("[ADM] Error guardando guardia:", resp.status, txt);
       alert("Error guardando Guardia. Mirá Console (F12). Status: " + resp.status);
       return false;
     }
 
+    // si devuelve representation, tomamos lo que venga
+    try {
+      const d = await resp.json();
+      const p = d?.[0]?.payload ?? payload;
+      guardiaState = p;
+    } catch {
+      guardiaState = payload;
+    }
+
+    renderGuardia();
     return true;
   }
 
-  async function ingresoGuardia() {
-    const lugar = normalizarLugarTexto(selGuardiaLugar?.value || "");
-    if (!lugar) return alert("Seleccioná un lugar para Ingreso.");
+  async function onIngreso() {
+    const lugar = normalizarLugar(selLugarGuardia?.value);
+    if (!lugar) return alert("Seleccioná un lugar primero.");
 
-    if (guardiaActual?.active) {
-      return alert(`Ya hay una guardia activa en: ${guardiaActual.lugar || "(sin lugar)"}`);
+    if (guardiaState?.active) {
+      alert("Ya existe una guardia activa. Primero haga RETIRO.");
+      return;
     }
 
-    const now = new Date().toISOString();
     const payload = {
       active: true,
       lugar,
-      ingreso_ts: now,
+      ingreso_ts: new Date().toISOString(),
       retiro_ts: null,
-      patrullas: [], // (próximo paso)
     };
 
-    const ok = await guardarGuardiaServidor(payload);
-    if (!ok) return;
-
-    guardiaActual = payload;
-    renderGuardia();
-    alert("Ingreso de guardia registrado.");
+    await guardarGuardiaEnServidor(payload);
   }
 
-  async function retiroGuardia() {
-    if (!guardiaActual?.active) return alert("No hay guardia activa para retirar.");
+  async function onRetiro() {
+    if (!guardiaState?.active) {
+      alert("No hay guardia activa para retirar.");
+      return;
+    }
 
-    const now = new Date().toISOString();
     const payload = {
-      ...guardiaActual,
+      ...guardiaState,
       active: false,
-      retiro_ts: now,
+      retiro_ts: new Date().toISOString(),
     };
 
-    const ok = await guardarGuardiaServidor(payload);
-    if (!ok) return;
-
-    guardiaActual = payload;
-    renderGuardia();
-    alert("Retiro de guardia registrado.");
+    await guardarGuardiaEnServidor(payload);
   }
 
-  if (btnGuardiaIngreso) btnGuardiaIngreso.addEventListener("click", ingresoGuardia);
-  if (btnGuardiaRetiro) btnGuardiaRetiro.addEventListener("click", retiroGuardia);
+  if (btnIngreso) btnIngreso.addEventListener("click", onIngreso);
+  if (btnRetiro) btnRetiro.addEventListener("click", onRetiro);
 
   // ======================================================
   // CONTROL DE SESIÓN + INIT
   // ======================================================
   function initAdm() {
     limpiarOrdenesCaducadas();
-    actualizarSelectorOrdenes();
+    actualizarSelector();
     cambiosId = 0;
     ultimoPublicadoId = 0;
     actualizarEstadoPublicar();
 
-    // Guardia
-    cargarLugaresDesdeOrdenes();
-    leerGuardiaServidor();
+    // guardia
+    cargarLugaresGuardia();
+    guardiaState = null;
     renderGuardia();
+    cargarGuardiaDesdeServidor();
   }
 
   const { data: { session }, error } = await supabaseClient.auth.getSession();
@@ -643,9 +605,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!email) return alert("Escribí tu email primero.");
 
       const repoName = location.pathname.split("/")[1] || "";
-      const redirectTo = repoName
-        ? `${location.origin}/${repoName}/reset.html`
-        : `${location.origin}/reset.html`;
+      const redirectTo = repoName ? `${location.origin}/${repoName}/reset.html` : `${location.origin}/reset.html`;
 
       const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
 
@@ -653,4 +613,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       alert("Te enviamos un correo para restablecer la contraseña.");
     });
   }
+
+  // Por defecto dejá “Órdenes” como tab inicial
+  activarTab("ordenes");
 });
