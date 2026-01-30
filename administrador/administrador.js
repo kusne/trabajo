@@ -421,8 +421,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       else elEstadoGuardia.textContent = `Finalizada — ${guardiaState.lugar || "Sin lugar"} (Retiro ${guardiaState.retiro_ts || ""})`;
     }
 
-    if (btnIngreso) btnIngreso.disabled = active;      // no permitir 2 guardias activas
-    if (btnRetiro) btnRetiro.disabled = !active;       // retiro solo si está activa
+    if (btnIngreso) btnIngreso.disabled = active; // no permitir 2 guardias activas
+    if (btnRetiro) btnRetiro.disabled = !active;  // retiro solo si está activa
+
+    // selector de lugar: si hay guardia activa, bloquear (evita “mover” la guardia)
+    if (selLugarGuardia) selLugarGuardia.disabled = active;
   }
 
   async function getSessionOrFail() {
@@ -431,7 +434,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     return session;
   }
 
-  // LEE guardia actual
+  // LEE guardia actual (NO necesita auth para read si tu RLS lo permite, pero lo dejamos con token)
   async function cargarGuardiaDesdeServidor() {
     const session = await getSessionOrFail();
     if (!session) return; // si no hay sesión, no rompemos
@@ -457,7 +460,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderGuardia();
   }
 
-  // GUARDA guardia (UPSERT)
+  // GUARDA guardia (PATCH id=1) -> evita problemas de columnas / upsert
   async function guardarGuardiaEnServidor(payload) {
     const session = await getSessionOrFail();
     if (!session) {
@@ -465,16 +468,16 @@ document.addEventListener("DOMContentLoaded", async () => {
       return false;
     }
 
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/guardia_store`, {
-      method: "POST", // UPSERT
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/guardia_store?id=eq.1`, {
+      method: "PATCH",
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
-        Prefer: "resolution=merge-duplicates,return=representation",
+        Prefer: "return=representation",
         apikey: SUPABASE_ANON_KEY,
         Authorization: "Bearer " + session.access_token,
       },
-      body: JSON.stringify([{ id: 1, payload }]),
+      body: JSON.stringify({ payload, updated_at: new Date().toISOString() }),
     });
 
     if (!resp.ok) {
@@ -484,7 +487,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       return false;
     }
 
-    // si devuelve representation, tomamos lo que venga
     try {
       const d = await resp.json();
       const p = d?.[0]?.payload ?? payload;
@@ -493,6 +495,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       guardiaState = payload;
     }
 
+    cargarLugaresGuardia();
     renderGuardia();
     return true;
   }
@@ -501,14 +504,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     const lugar = normalizarLugar(selLugarGuardia?.value);
     if (!lugar) return alert("Seleccioná un lugar primero.");
 
+    // doble check leyendo server (evita carreras)
+    await cargarGuardiaDesdeServidor();
     if (guardiaState?.active) {
       alert("Ya existe una guardia activa. Primero haga RETIRO.");
       return;
     }
 
     const payload = {
-      active: true,
       lugar,
+      active: true,
       ingreso_ts: new Date().toISOString(),
       retiro_ts: null,
     };
@@ -517,6 +522,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function onRetiro() {
+    // doble check leyendo server
+    await cargarGuardiaDesdeServidor();
     if (!guardiaState?.active) {
       alert("No hay guardia activa para retirar.");
       return;
@@ -531,8 +538,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     await guardarGuardiaEnServidor(payload);
   }
 
-  if (btnIngreso) btnIngreso.addEventListener("click", onIngreso);
-  if (btnRetiro) btnRetiro.addEventListener("click", onRetiro);
+  if (btnIngreso) btnIngreso.addEventListener("click", () => onIngreso().catch((e) => console.error(e)));
+  if (btnRetiro) btnRetiro.addEventListener("click", () => onRetiro().catch((e) => console.error(e)));
 
   // ======================================================
   // CONTROL DE SESIÓN + INIT
