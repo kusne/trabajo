@@ -55,7 +55,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const tabBtns = Array.from(document.querySelectorAll(".tab-btn"));
   const tabPanels = {
     ordenes: document.getElementById("tab-ordenes"),
-    guardia: document.getElementById("tab-guardia"),
+    guardia: document.getElementById("tab-guardia"), // puede existir en HTML; ya no tiene lógica vieja
   };
 
   function activarTab(nombre) {
@@ -74,13 +74,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   const fechaVigenciaEl = document.getElementById("fechaVigencia");
   const selectOrdenExistente = document.getElementById("ordenExistente");
   const btnPublicar = document.getElementById("btnPublicarOrdenes");
-
-  // ===== ADM ELEMENTS (GUARDIA) =====
-  const selLugarGuardia = document.getElementById("guardiaLugar");
-  const elEstadoGuardia = document.getElementById("guardiaEstado");
-  const preGuardia = document.getElementById("guardiaJsonPreview");
-  const btnIngreso = document.getElementById("btnGuardiaIngreso");
-  const btnRetiro = document.getElementById("btnGuardiaRetiro");
 
   // ===== LOGOUT =====
   const btnLogout = document.getElementById("btnLogout");
@@ -224,9 +217,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     limpiarCampos();
     marcarCambio();
 
-    // refresca lugares (Guardia) por si agregaste una orden nueva
-    cargarLugaresGuardia();
-
     alert("Orden guardada.");
   }
 
@@ -311,9 +301,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     actualizarSelector();
     marcarCambio();
 
-    // refresca lugares (Guardia) por si borraste un lugar
-    cargarLugaresGuardia();
-
     alert("Orden eliminada.");
   }
 
@@ -369,179 +356,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   window.__adm_publicarOrdenes = publicarOrdenes;
 
   // ======================================================
-  // ====== GUARDIA (Ingreso / Retiro) =====================
-  // ======================================================
-  let guardiaState = null; // payload actual
-
-  function normalizarLugar(l) {
-    return String(l || "").trim().replace(/\s+/g, " ");
-  }
-
-  function lugaresDesdeOrdenes() {
-    if (typeof StorageApp === "undefined" || !StorageApp.cargarOrdenes) return [];
-    const ordenes = StorageApp.cargarOrdenes();
-    const set = new Set();
-
-    (ordenes || []).forEach((o) => {
-      (o?.franjas || []).forEach((f) => {
-        const lug = normalizarLugar(f?.lugar);
-        if (lug) set.add(lug);
-      });
-    });
-
-    return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
-  }
-
-  function cargarLugaresGuardia() {
-    if (!selLugarGuardia) return;
-    const lugares = lugaresDesdeOrdenes();
-
-    const actual = selLugarGuardia.value || "";
-    selLugarGuardia.innerHTML = `<option value="">Seleccionar lugar</option>`;
-    lugares.forEach((l) => {
-      const opt = document.createElement("option");
-      opt.value = l;
-      opt.textContent = l;
-      selLugarGuardia.appendChild(opt);
-    });
-
-    // intentar mantener selección
-    if (actual && lugares.includes(actual)) selLugarGuardia.value = actual;
-    else if (guardiaState?.lugar && lugares.includes(guardiaState.lugar)) selLugarGuardia.value = guardiaState.lugar;
-  }
-
-  function renderGuardia() {
-    if (preGuardia) preGuardia.textContent = JSON.stringify(guardiaState || {}, null, 2);
-
-    const active = !!guardiaState?.active;
-
-    if (elEstadoGuardia) {
-      if (!guardiaState) elEstadoGuardia.textContent = "Sin guardia activa";
-      else if (active) elEstadoGuardia.textContent = `Activa — ${guardiaState.lugar || "Sin lugar"} (Ingreso ${guardiaState.ingreso_ts || ""})`;
-      else elEstadoGuardia.textContent = `Finalizada — ${guardiaState.lugar || "Sin lugar"} (Retiro ${guardiaState.retiro_ts || ""})`;
-    }
-
-    if (btnIngreso) btnIngreso.disabled = active; // no permitir 2 guardias activas
-    if (btnRetiro) btnRetiro.disabled = !active;  // retiro solo si está activa
-
-    // selector de lugar: si hay guardia activa, bloquear (evita “mover” la guardia)
-    if (selLugarGuardia) selLugarGuardia.disabled = active;
-  }
-
-  async function getSessionOrFail() {
-    const { data: { session }, error } = await supabaseClient.auth.getSession();
-    if (error || !session?.access_token) return null;
-    return session;
-  }
-
-  // LEE guardia actual (NO necesita auth para read si tu RLS lo permite, pero lo dejamos con token)
-  async function cargarGuardiaDesdeServidor() {
-    const session = await getSessionOrFail();
-    if (!session) return; // si no hay sesión, no rompemos
-
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/guardia_store?select=payload&id=eq.1&limit=1`, {
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Accept: "application/json",
-        Authorization: "Bearer " + session.access_token,
-      },
-    });
-
-    if (!r.ok) {
-      const txt = await r.text();
-      console.warn("[ADM] No se pudo leer guardia_store:", r.status, txt);
-      return;
-    }
-
-    const data = await r.json();
-    const payload = data?.[0]?.payload || null;
-    guardiaState = payload;
-    cargarLugaresGuardia();
-    renderGuardia();
-  }
-
-  // GUARDA guardia (PATCH id=1) -> evita problemas de columnas / upsert
-  async function guardarGuardiaEnServidor(payload) {
-    const session = await getSessionOrFail();
-    if (!session) {
-      alert("No hay sesión iniciada. Inicie sesión antes de usar Guardia.");
-      return false;
-    }
-
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/guardia_store?id=eq.1`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Prefer: "return=representation",
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: "Bearer " + session.access_token,
-      },
-      body: JSON.stringify({ payload, updated_at: new Date().toISOString() }),
-    });
-
-    if (!resp.ok) {
-      const txt = await resp.text();
-      console.error("[ADM] Error guardando guardia:", resp.status, txt);
-      alert("Error guardando Guardia. Mirá Console (F12). Status: " + resp.status);
-      return false;
-    }
-
-    try {
-      const d = await resp.json();
-      const p = d?.[0]?.payload ?? payload;
-      guardiaState = p;
-    } catch {
-      guardiaState = payload;
-    }
-
-    cargarLugaresGuardia();
-    renderGuardia();
-    return true;
-  }
-
-  async function onIngreso() {
-    const lugar = normalizarLugar(selLugarGuardia?.value);
-    if (!lugar) return alert("Seleccioná un lugar primero.");
-
-    // doble check leyendo server (evita carreras)
-    await cargarGuardiaDesdeServidor();
-    if (guardiaState?.active) {
-      alert("Ya existe una guardia activa. Primero haga RETIRO.");
-      return;
-    }
-
-    const payload = {
-      lugar,
-      active: true,
-      ingreso_ts: new Date().toISOString(),
-      retiro_ts: null,
-    };
-
-    await guardarGuardiaEnServidor(payload);
-  }
-
-  async function onRetiro() {
-    // doble check leyendo server
-    await cargarGuardiaDesdeServidor();
-    if (!guardiaState?.active) {
-      alert("No hay guardia activa para retirar.");
-      return;
-    }
-
-    const payload = {
-      ...guardiaState,
-      active: false,
-      retiro_ts: new Date().toISOString(),
-    };
-
-    await guardarGuardiaEnServidor(payload);
-  }
-
-  if (btnIngreso) btnIngreso.addEventListener("click", () => onIngreso().catch((e) => console.error(e)));
-  if (btnRetiro) btnRetiro.addEventListener("click", () => onRetiro().catch((e) => console.error(e)));
-
-  // ======================================================
   // CONTROL DE SESIÓN + INIT
   // ======================================================
   function initAdm() {
@@ -550,12 +364,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     cambiosId = 0;
     ultimoPublicadoId = 0;
     actualizarEstadoPublicar();
-
-    // guardia
-    cargarLugaresGuardia();
-    guardiaState = null;
-    renderGuardia();
-    cargarGuardiaDesdeServidor();
   }
 
   const { data: { session }, error } = await supabaseClient.auth.getSession();
