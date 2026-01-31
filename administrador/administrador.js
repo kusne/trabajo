@@ -39,6 +39,68 @@ function normalizarOrdenParaPublicar(o) {
   return out;
 }
 
+function normalizarLugar(l) {
+  return String(l || "").trim().replace(/\s+/g, " ");
+}
+
+function hhmmNow() {
+  const d = new Date();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+function ymdToday() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function makeId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `id_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+// ---- intenta leer listas desde datos.js (sin crashear si cambia el nombre) ----
+function getDatosRoot() {
+  return window.DATOS || window.Datos || window.datos || window.AppDatos || null;
+}
+
+function getListaDesdeDatos(clavesPosibles) {
+  const root = getDatosRoot();
+  if (!root) return [];
+
+  for (const k of clavesPosibles) {
+    const v = root?.[k];
+    if (Array.isArray(v) && v.length) return v;
+  }
+  return [];
+}
+
+// Normaliza elementos tipo {label,value} o string
+function normalizarItem(x) {
+  if (x == null) return null;
+  if (typeof x === "string") return { label: x, value: x };
+  if (typeof x === "number") return { label: String(x), value: String(x) };
+  if (typeof x === "object") {
+    const label = x.label ?? x.nombre ?? x.name ?? x.text ?? x.value ?? x.id ?? null;
+    const value = x.value ?? x.id ?? x.key ?? label ?? null;
+    if (!label || !value) return null;
+    return { label: String(label), value: String(value) };
+  }
+  return null;
+}
+
+function buildItems(list) {
+  return (list || []).map(normalizarItem).filter(Boolean);
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[c]));
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   // ===== CONTENEDORES LOGIN / ADM =====
   const loginContainer = document.getElementById("loginContainer");
@@ -55,7 +117,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const tabBtns = Array.from(document.querySelectorAll(".tab-btn"));
   const tabPanels = {
     ordenes: document.getElementById("tab-ordenes"),
-    guardia: document.getElementById("tab-guardia"), // puede existir en HTML; ya no tiene lógica vieja
+    guardia: document.getElementById("tab-guardia"),
   };
 
   function activarTab(nombre) {
@@ -74,6 +136,26 @@ document.addEventListener("DOMContentLoaded", async () => {
   const fechaVigenciaEl = document.getElementById("fechaVigencia");
   const selectOrdenExistente = document.getElementById("ordenExistente");
   const btnPublicar = document.getElementById("btnPublicarOrdenes");
+
+  // ===== ADM ELEMENTS (BASE / RETIROS) =====
+  const elBaseEstado = document.getElementById("baseEstado");
+  const preBase = document.getElementById("baseJsonPreview");
+
+  const selBaseLugar = document.getElementById("baseLugar");
+  const inpHoraRetiro = document.getElementById("baseHoraRetiro");
+  const inpHoraInicioPrev = document.getElementById("baseHoraInicioPrev");
+  const inpMision = document.getElementById("baseMision");
+  const inpObs = document.getElementById("baseObs");
+
+  const boxPersonal = document.getElementById("basePersonalList");
+  const boxMovil = document.getElementById("baseMovilList");
+  const boxElementos = document.getElementById("baseElementosList");
+
+  const btnRegistrarRetiro = document.getElementById("btnRegistrarRetiro");
+  const btnCerrarRetiro = document.getElementById("btnCerrarRetiro");
+  const btnRefrescarRetiros = document.getElementById("btnRefrescarRetiros");
+
+  const contRetirosAbiertos = document.getElementById("retirosAbiertosList");
 
   // ===== LOGOUT =====
   const btnLogout = document.getElementById("btnLogout");
@@ -217,6 +299,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     limpiarCampos();
     marcarCambio();
 
+    // refresca lugares base
+    cargarLugaresBase();
+
     alert("Orden guardada.");
   }
 
@@ -301,6 +386,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     actualizarSelector();
     marcarCambio();
 
+    // refresca lugares base
+    cargarLugaresBase();
+
     alert("Orden eliminada.");
   }
 
@@ -356,6 +444,331 @@ document.addEventListener("DOMContentLoaded", async () => {
   window.__adm_publicarOrdenes = publicarOrdenes;
 
   // ======================================================
+  // ====== BASE / RETIROS (nuevo) =========================
+  // ======================================================
+
+  // store único en Supabase: guardia_store (id=1) con payload = { version, retiros: [] }
+  let baseStore = { version: 1, retiros: [] };
+  let retiroSeleccionadoId = null;
+
+  function lugaresDesdeOrdenes() {
+    if (typeof StorageApp === "undefined" || !StorageApp.cargarOrdenes) return [];
+    const ordenes = StorageApp.cargarOrdenes();
+    const set = new Set();
+
+    (ordenes || []).forEach((o) => {
+      (o?.franjas || []).forEach((f) => {
+        const lug = normalizarLugar(f?.lugar);
+        if (lug) set.add(lug);
+      });
+    });
+
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
+  }
+
+  function cargarLugaresBase() {
+    if (!selBaseLugar) return;
+    const lugares = lugaresDesdeOrdenes();
+
+    const actual = selBaseLugar.value || "";
+    selBaseLugar.innerHTML = `<option value="">Seleccionar lugar</option>`;
+    lugares.forEach((l) => {
+      const opt = document.createElement("option");
+      opt.value = l;
+      opt.textContent = l;
+      selBaseLugar.appendChild(opt);
+    });
+
+    if (actual && lugares.includes(actual)) selBaseLugar.value = actual;
+  }
+
+  function renderBasePreview() {
+    if (preBase) preBase.textContent = JSON.stringify(baseStore || {}, null, 2);
+
+    const abiertos = (baseStore?.retiros || []).filter((r) => r?.estado === "ABIERTO");
+    if (elBaseEstado) elBaseEstado.textContent = `Retiros abiertos: ${abiertos.length}`;
+
+    // lista abiertos
+    if (contRetirosAbiertos) {
+      if (!abiertos.length) {
+        contRetirosAbiertos.innerHTML = `<div class="muted">No hay retiros abiertos.</div>`;
+      } else {
+        contRetirosAbiertos.innerHTML = abiertos.map((r) => {
+          const isSel = retiroSeleccionadoId === r.id;
+          const personal = Array.isArray(r.personal) ? r.personal.join(", ") : String(r.personal || "");
+          const elems = Array.isArray(r.elementos) ? r.elementos.join(", ") : String(r.elementos || "");
+          return `
+            <div data-retiro-id="${esc(r.id)}"
+                 style="border:1px solid #ddd; border-radius:10px; padding:10px; margin:8px 0; cursor:pointer; background:${isSel ? "#f0f7ff" : "#fff"}">
+              <div style="font-weight:700;">${esc(r.movil || "SIN MÓVIL")} — ${esc(r.lugar || "SIN LUGAR")}</div>
+              <div class="muted">Retiro: ${esc(r.hora_retiro || "")} — Fecha: ${esc(r.fecha || "")}</div>
+              <div style="margin-top:6px;"><b>Personal:</b> ${esc(personal || "-")}</div>
+              <div><b>Elementos:</b> ${esc(elems || "-")}</div>
+              <div class="muted" style="margin-top:6px;">(Click para seleccionar y poder cerrar)</div>
+            </div>
+          `;
+        }).join("");
+
+        contRetirosAbiertos.querySelectorAll("[data-retiro-id]").forEach((el) => {
+          el.addEventListener("click", () => {
+            retiroSeleccionadoId = el.getAttribute("data-retiro-id");
+            renderBasePreview();
+          });
+        });
+      }
+    }
+
+    if (btnCerrarRetiro) btnCerrarRetiro.disabled = !retiroSeleccionadoId;
+  }
+
+  async function getSessionOrFail() {
+    const { data: { session }, error } = await supabaseClient.auth.getSession();
+    if (error || !session?.access_token) return null;
+    return session;
+  }
+
+  // lee guardia_store.payload
+  async function cargarBaseDesdeServidor() {
+    const session = await getSessionOrFail();
+    if (!session) {
+      baseStore = { version: 1, retiros: [] };
+      renderBasePreview();
+      return;
+    }
+
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/guardia_store?select=payload&id=eq.1&limit=1`, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Accept: "application/json",
+        Authorization: "Bearer " + session.access_token,
+      },
+    });
+
+    if (!r.ok) {
+      const txt = await r.text();
+      console.warn("[ADM] No se pudo leer guardia_store:", r.status, txt);
+      baseStore = { version: 1, retiros: [] };
+      renderBasePreview();
+      return;
+    }
+
+    const data = await r.json();
+    const payload = data?.[0]?.payload || null;
+
+    // Normaliza formato
+    if (payload && typeof payload === "object" && Array.isArray(payload.retiros)) {
+      baseStore = payload;
+    } else {
+      baseStore = { version: 1, retiros: [] };
+    }
+
+    // si el retiro seleccionado ya no existe, limpiamos
+    const abiertos = baseStore.retiros.filter((x) => x?.estado === "ABIERTO");
+    if (retiroSeleccionadoId && !abiertos.some((x) => x.id === retiroSeleccionadoId)) retiroSeleccionadoId = null;
+
+    renderBasePreview();
+  }
+
+  // guarda guardia_store.payload
+  async function guardarBaseEnServidor(nextPayload) {
+    const session = await getSessionOrFail();
+    if (!session) {
+      alert("No hay sesión iniciada. Inicie sesión antes de usar Guardia.");
+      return false;
+    }
+
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/guardia_store?id=eq.1`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Prefer: "return=representation",
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: "Bearer " + session.access_token,
+      },
+      body: JSON.stringify({ payload: nextPayload, updated_at: new Date().toISOString() }),
+    });
+
+    if (!resp.ok) {
+      const txt = await resp.text();
+      console.error("[ADM] Error guardando baseStore:", resp.status, txt);
+      alert("Error guardando retiros. Mirá Console (F12). Status: " + resp.status);
+      return false;
+    }
+
+    try {
+      const d = await resp.json();
+      baseStore = d?.[0]?.payload ?? nextPayload;
+    } catch {
+      baseStore = nextPayload;
+    }
+
+    renderBasePreview();
+    return true;
+  }
+
+  function renderChips(container, items, { type, name, prefixId }) {
+    if (!container) return;
+
+    if (!items.length) {
+      container.innerHTML = `<div class="muted">No se encontraron datos en datos.js para este bloque.</div>`;
+      return;
+    }
+
+    container.innerHTML = items.map((it, idx) => {
+      const id = `${prefixId}_${idx}`;
+      if (type === "radio") {
+        return `
+          <label class="checkbox-container" style="display:flex; align-items:center; gap:8px; border:1px solid #ddd; padding:6px 10px; border-radius:999px;">
+            <input type="radio" name="${esc(name)}" id="${esc(id)}" value="${esc(it.value)}">
+            <span>${esc(it.label)}</span>
+          </label>
+        `;
+      }
+      // checkbox
+      return `
+        <label class="checkbox-container" style="display:flex; align-items:center; gap:8px; border:1px solid #ddd; padding:6px 10px; border-radius:999px;">
+          <input type="checkbox" id="${esc(id)}" value="${esc(it.value)}">
+          <span>${esc(it.label)}</span>
+        </label>
+      `;
+    }).join("");
+  }
+
+  function leerSeleccionCheckbox(container) {
+    if (!container) return [];
+    const inputs = Array.from(container.querySelectorAll('input[type="checkbox"]'));
+    return inputs.filter((i) => i.checked).map((i) => i.value);
+  }
+
+  function leerSeleccionRadio(container, name) {
+    if (!container) return "";
+    const el = container.querySelector(`input[type="radio"][name="${CSS.escape(name)}"]:checked`);
+    return el ? el.value : "";
+  }
+
+  function limpiarSeleccionBase() {
+    retiroSeleccionadoId = null;
+
+    if (selBaseLugar) selBaseLugar.value = "";
+    if (inpHoraRetiro) inpHoraRetiro.value = hhmmNow();
+    if (inpHoraInicioPrev) inpHoraInicioPrev.value = "";
+    if (inpMision) inpMision.value = "";
+    if (inpObs) inpObs.value = "";
+
+    if (boxPersonal) Array.from(boxPersonal.querySelectorAll('input[type="checkbox"]')).forEach((x) => x.checked = false);
+    if (boxMovil) Array.from(boxMovil.querySelectorAll('input[type="radio"]')).forEach((x) => x.checked = false);
+    if (boxElementos) Array.from(boxElementos.querySelectorAll('input[type="checkbox"]')).forEach((x) => x.checked = false);
+  }
+
+  async function onRegistrarRetiro() {
+    // sincroniza store para evitar carreras
+    await cargarBaseDesdeServidor();
+
+    const lugar = normalizarLugar(selBaseLugar?.value);
+    const hora_retiro = (inpHoraRetiro?.value || "").trim() || hhmmNow();
+
+    // listas
+    const personal = leerSeleccionCheckbox(boxPersonal);
+    const movil = leerSeleccionRadio(boxMovil, "baseMovilRadio");
+    const elementos = leerSeleccionCheckbox(boxElementos);
+
+    const hora_inicio_prevista = (inpHoraInicioPrev?.value || "").trim() || null;
+    const mision = (inpMision?.value || "").trim() || null;
+    const obs = (inpObs?.value || "").trim() || null;
+
+    if (!lugar) return alert("Seleccioná un lugar.");
+    if (!personal.length) return alert("Seleccioná al menos 1 personal.");
+    if (!movil) return alert("Seleccioná 1 móvil.");
+
+    // regla: 1 retiro ABIERTO por móvil
+    const ya = (baseStore.retiros || []).find((r) => r?.estado === "ABIERTO" && String(r?.movil) === String(movil));
+    if (ya) {
+      const ok = confirm(`Ya existe un RETIRO ABIERTO para el móvil ${movil}.\n\n¿Querés CERRAR el anterior y abrir uno nuevo?`);
+      if (!ok) return;
+
+      // cerrar anterior
+      ya.estado = "CERRADO";
+      ya.hora_regreso = hhmmNow();
+      ya.cierre_ts = new Date().toISOString();
+    }
+
+    const retiro = {
+      id: makeId(),
+      estado: "ABIERTO",
+      fecha: ymdToday(),
+      hora_retiro,
+      movil,
+      lugar,
+      personal,
+      elementos,
+      hora_inicio_prevista,
+      mision_prevista: mision,
+      observaciones: obs,
+      retiro_ts: new Date().toISOString(),
+      cierre_ts: null,
+      hora_regreso: null,
+    };
+
+    const next = {
+      ...baseStore,
+      version: 1,
+      retiros: [retiro, ...(baseStore.retiros || [])], // último arriba
+    };
+
+    const okSave = await guardarBaseEnServidor(next);
+    if (!okSave) return;
+
+    limpiarSeleccionBase();
+    await cargarBaseDesdeServidor();
+    alert("RETIRO registrado (ABIERTO).");
+  }
+
+  async function onCerrarRetiro() {
+    await cargarBaseDesdeServidor();
+
+    if (!retiroSeleccionadoId) return alert("Seleccioná un retiro abierto primero.");
+    const idx = (baseStore.retiros || []).findIndex((r) => r?.id === retiroSeleccionadoId && r?.estado === "ABIERTO");
+    if (idx < 0) {
+      retiroSeleccionadoId = null;
+      renderBasePreview();
+      return alert("Ese retiro ya no está ABIERTO.");
+    }
+
+    const r = baseStore.retiros[idx];
+    r.estado = "CERRADO";
+    r.hora_regreso = hhmmNow();
+    r.cierre_ts = new Date().toISOString();
+
+    const next = { ...baseStore, retiros: [...baseStore.retiros] };
+    const okSave = await guardarBaseEnServidor(next);
+    if (!okSave) return;
+
+    retiroSeleccionadoId = null;
+    await cargarBaseDesdeServidor();
+    alert("RETIRO cerrado (ingreso de regreso).");
+  }
+
+  function initListasDesdeDatos() {
+    // Ajuste: cambiá estas claves si tu datos.js usa otros nombres
+    const personalRaw = getListaDesdeDatos(["personal", "PERSONAL", "efectivos", "numerarios", "PERSONAL_LIST"]);
+    const movilesRaw = getListaDesdeDatos(["moviles", "MOVILES", "movilesDisponibles", "MOVILES_LIST", "mobiles"]);
+    const elementosRaw = getListaDesdeDatos(["elementos", "ELEMENTOS", "equipo", "EQUIPO", "ELEMENTOS_LIST"]);
+
+    const personal = buildItems(personalRaw);
+    const moviles = buildItems(movilesRaw);
+    const elementos = buildItems(elementosRaw);
+
+    renderChips(boxPersonal, personal, { type: "checkbox", prefixId: "per", name: "" });
+    renderChips(boxMovil, moviles, { type: "radio", name: "baseMovilRadio", prefixId: "mov" });
+    renderChips(boxElementos, elementos, { type: "checkbox", prefixId: "elm", name: "" });
+  }
+
+  if (btnRegistrarRetiro) btnRegistrarRetiro.addEventListener("click", () => onRegistrarRetiro().catch((e) => console.error(e)));
+  if (btnCerrarRetiro) btnCerrarRetiro.addEventListener("click", () => onCerrarRetiro().catch((e) => console.error(e)));
+  if (btnRefrescarRetiros) btnRefrescarRetiros.addEventListener("click", () => cargarBaseDesdeServidor().catch((e) => console.error(e)));
+
+  // ======================================================
   // CONTROL DE SESIÓN + INIT
   // ======================================================
   function initAdm() {
@@ -364,6 +777,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     cambiosId = 0;
     ultimoPublicadoId = 0;
     actualizarEstadoPublicar();
+
+    // Base / retiros
+    if (inpHoraRetiro) inpHoraRetiro.value = hhmmNow();
+    cargarLugaresBase();
+    initListasDesdeDatos();
+
+    baseStore = { version: 1, retiros: [] };
+    retiroSeleccionadoId = null;
+    renderBasePreview();
+    cargarBaseDesdeServidor();
   }
 
   const { data: { session }, error } = await supabaseClient.auth.getSession();
