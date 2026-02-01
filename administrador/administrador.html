@@ -91,8 +91,55 @@
     <section id="tab-guardia" class="tab-panel">
       <h2>Guardia</h2>
       <p class="muted">
-        Retiro de Base: seleccionás personal, móvil y elementos desde listas/checkbox y se guarda como preset (para que WSP autocomplete el inicio).
+        Retiro de Base: seleccionás personal, móvil y elementos desde inventario (Supabase) y se guarda como preset (para que WSP autocomplete el inicio).
       </p>
+
+      <!-- ===================== INVENTARIO (Supabase) ===================== -->
+      <h3>Inventario (listas para checkbox)</h3>
+
+      <div class="guardia-box" style="display:block;">
+        <div class="row" style="gap:10px; align-items:flex-end;">
+          <div style="width:160px;">
+            <label for="invTipo">Tipo</label>
+            <select id="invTipo" class="full">
+              <option value="personal">personal</option>
+              <option value="movil">movil</option>
+              <option value="elemento">elemento</option>
+            </select>
+          </div>
+
+          <div style="flex:1;">
+            <label for="invLabel">Label (lo que se ve)</label>
+            <input id="invLabel" type="text" class="full" placeholder="Ej: Suboficial Aquino F. / Impresora 05">
+          </div>
+
+          <div style="width:220px;">
+            <label for="invValue">Value (interno)</label>
+            <input id="invValue" type="text" class="full" placeholder="Ej: aquino_f / impresora_05 / 12502">
+          </div>
+
+          <div style="width:110px;">
+            <label for="invOrden">Orden</label>
+            <input id="invOrden" type="number" class="full" value="0">
+          </div>
+
+          <div style="width:160px;">
+            <button type="button" id="btnInvAgregar" class="btn-primary">Agregar</button>
+          </div>
+        </div>
+
+        <div class="row" style="gap:10px; margin-top:10px;">
+          <button type="button" id="btnInvRefrescar" class="btn-success">Actualizar inventario</button>
+          <div class="muted" id="invEstado" style="align-self:center;">—</div>
+        </div>
+
+        <div id="invLista" class="full" style="margin-top:10px;"></div>
+      </div>
+
+      <hr>
+
+      <!-- ===================== RETIRO BASE ===================== -->
+      <h3>Retiro de Base</h3>
 
       <div class="guardia-box" style="display:block;">
         <div style="margin-bottom:10px;">
