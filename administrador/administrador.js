@@ -24,8 +24,10 @@ if (!window.supabase || typeof window.supabase.createClient !== "function") {
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+// ======================================================
+// Utils
+// ======================================================
 function isoToLatam(iso) {
-  // "2026-01-20" -> "20/01/2026"
   const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return iso || "";
   return `${m[3]}/${m[2]}/${m[1]}`;
@@ -63,42 +65,83 @@ function makeId() {
   return `id_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 }
 
-// ---- intenta leer listas desde datos.js (sin crashear si cambia el nombre) ----
-function getDatosRoot() {
-  return window.DATOS || window.Datos || window.datos || window.AppDatos || null;
-}
-
-function getListaDesdeDatos(clavesPosibles) {
-  const root = getDatosRoot();
-  if (!root) return [];
-
-  for (const k of clavesPosibles) {
-    const v = root?.[k];
-    if (Array.isArray(v) && v.length) return v;
-  }
-  return [];
-}
-
-// Normaliza elementos tipo {label,value} o string
-function normalizarItem(x) {
-  if (x == null) return null;
-  if (typeof x === "string") return { label: x, value: x };
-  if (typeof x === "number") return { label: String(x), value: String(x) };
-  if (typeof x === "object") {
-    const label = x.label ?? x.nombre ?? x.name ?? x.text ?? x.value ?? x.id ?? null;
-    const value = x.value ?? x.id ?? x.key ?? label ?? null;
-    if (!label || !value) return null;
-    return { label: String(label), value: String(value) };
-  }
-  return null;
-}
-
-function buildItems(list) {
-  return (list || []).map(normalizarItem).filter(Boolean);
-}
-
 function esc(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[c]));
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[c]));
+}
+
+function slugifyValue(s) {
+  return String(s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[áàäâ]/g, "a")
+    .replace(/[éèëê]/g, "e")
+    .replace(/[íìïî]/g, "i")
+    .replace(/[óòöô]/g, "o")
+    .replace(/[úùüû]/g, "u")
+    .replace(/ñ/g, "n")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+async function getSessionOrNull() {
+  const { data: { session }, error } = await supabaseClient.auth.getSession();
+  if (error || !session?.access_token) return null;
+  return session;
+}
+
+// PATCH id=1; si no existe, intentamos INSERT id=1
+async function patchOrInsertStore({ table, payload, session }) {
+  const urlPatch = `${SUPABASE_URL}/rest/v1/${table}?id=eq.1`;
+  const body = JSON.stringify({ payload, updated_at: new Date().toISOString() });
+
+  const doPatch = async () => fetch(urlPatch, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Prefer: "return=representation",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: "Bearer " + session.access_token,
+    },
+    body,
+  });
+
+  let resp = await doPatch();
+
+  // Si no existe fila id=1 (404 / 406 según config), intentamos INSERT
+  if (!resp.ok) {
+    const txt = await resp.text();
+    // Heurística: si fue “no rows” / 404-like, probamos insert
+    const maybeMissingRow = resp.status === 404 || resp.status === 406 || /0 rows/i.test(txt) || /not found/i.test(txt);
+    if (maybeMissingRow) {
+      const urlInsert = `${SUPABASE_URL}/rest/v1/${table}`;
+      resp = await fetch(urlInsert, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          Prefer: "return=representation",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: "Bearer " + session.access_token,
+        },
+        body: JSON.stringify([{ id: 1, payload, updated_at: new Date().toISOString() }]),
+      });
+    } else {
+      // si no es missing row, devolvemos el error original
+      return { ok: false, status: resp.status, text: txt };
+    }
+  }
+
+  if (!resp.ok) {
+    const txt2 = await resp.text();
+    return { ok: false, status: resp.status, text: txt2 };
+  }
+
+  let data = null;
+  try { data = await resp.json(); } catch {}
+  return { ok: true, data };
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -137,7 +180,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   const selectOrdenExistente = document.getElementById("ordenExistente");
   const btnPublicar = document.getElementById("btnPublicarOrdenes");
 
-  // ===== ADM ELEMENTS (BASE / RETIROS) =====
+  // ===== INVENTARIO UI =====
+  const invTipo = document.getElementById("invTipo");
+  const invLabel = document.getElementById("invLabel");
+  const invValue = document.getElementById("invValue");
+  const invOrden = document.getElementById("invOrden");
+  const btnInvAgregar = document.getElementById("btnInvAgregar");
+  const btnInvRefrescar = document.getElementById("btnInvRefrescar");
+  const invLista = document.getElementById("invLista");
+  const invEstado = document.getElementById("invEstado");
+
+  // ===== RETIROS UI =====
   const elBaseEstado = document.getElementById("baseEstado");
   const preBase = document.getElementById("baseJsonPreview");
 
@@ -154,7 +207,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   const btnRegistrarRetiro = document.getElementById("btnRegistrarRetiro");
   const btnCerrarRetiro = document.getElementById("btnCerrarRetiro");
   const btnRefrescarRetiros = document.getElementById("btnRefrescarRetiros");
-
   const contRetirosAbiertos = document.getElementById("retirosAbiertosList");
 
   // ===== LOGOUT =====
@@ -347,6 +399,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (franjasEl) {
         franjasEl.value = (o.franjas || []).map((f) => `${f.horario} - ${f.lugar} - ${f.titulo}`).join("\n");
       }
+
+      // refresca lugares base (por si cambió alguna franja/lugar)
+      cargarLugaresBase();
     });
   }
 
@@ -386,9 +441,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     actualizarSelector();
     marcarCambio();
 
-    // refresca lugares base
     cargarLugaresBase();
-
     alert("Orden eliminada.");
   }
 
@@ -411,8 +464,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     const ordenes = StorageApp.cargarOrdenes();
     const payloadPublicar = Array.isArray(ordenes) ? ordenes.map(normalizarOrdenParaPublicar) : [];
 
-    const { data: { session }, error: sessionErr } = await supabaseClient.auth.getSession();
-    if (sessionErr || !session?.access_token) {
+    const session = await getSessionOrNull();
+    if (!session) {
       alert("No hay sesión iniciada. Inicie sesión antes de publicar.");
       return;
     }
@@ -444,10 +497,187 @@ document.addEventListener("DOMContentLoaded", async () => {
   window.__adm_publicarOrdenes = publicarOrdenes;
 
   // ======================================================
-  // ====== BASE / RETIROS (nuevo) =========================
+  // INVENTARIO (Supabase: inventario_base)
   // ======================================================
+  let inventario = [];
 
-  // store único en Supabase: guardia_store (id=1) con payload = { version, retiros: [] }
+  function invActivos(tipo) {
+    return inventario
+      .filter((x) => x.tipo === tipo && x.activo)
+      .sort((a, b) => (a.orden - b.orden) || a.label.localeCompare(b.label, "es"));
+  }
+
+  function invLabelFromValue(tipo, value) {
+    const r = inventario.find((x) => x.tipo === tipo && x.value === value);
+    return r ? r.label : value;
+  }
+
+  async function invLoad() {
+    if (invEstado) invEstado.textContent = "Cargando inventario…";
+
+    const { data, error } = await supabaseClient
+      .from("inventario_base")
+      .select("id,tipo,label,value,orden,activo")
+      .order("tipo", { ascending: true })
+      .order("orden", { ascending: true })
+      .order("label", { ascending: true });
+
+    if (error) {
+      console.error("[ADM] inventario_base load error:", error);
+      if (invEstado) invEstado.textContent = "Error cargando inventario (mirá Console).";
+      inventario = [];
+      renderInventarioLista();
+      renderChipsDesdeInventario();
+      return false;
+    }
+
+    inventario = Array.isArray(data) ? data : [];
+    if (invEstado) invEstado.textContent = `Inventario: ${inventario.length} ítems`;
+    renderInventarioLista();
+    renderChipsDesdeInventario();
+    return true;
+  }
+
+  async function invInsert() {
+    const tipo = (invTipo?.value || "personal").trim();
+    const label = (invLabel?.value || "").trim();
+    let value = (invValue?.value || "").trim();
+    const orden = Number(invOrden?.value || 0);
+
+    if (!label) return alert("Label: obligatorio.");
+    if (!value) value = slugifyValue(label);
+
+    const { error } = await supabaseClient
+      .from("inventario_base")
+      .insert([{
+        tipo,
+        label,
+        value,
+        orden: isNaN(orden) ? 0 : orden,
+        activo: true,
+      }]);
+
+    if (error) {
+      console.error("[ADM] inventario_base insert error:", error);
+      alert("Error agregando inventario. Mirá Console (F12).\n\nDetalle: " + (error.message || ""));
+      return;
+    }
+
+    if (invLabel) invLabel.value = "";
+    if (invValue) invValue.value = "";
+    if (invOrden) invOrden.value = "0";
+
+    await invLoad();
+  }
+
+  async function invToggleActivo(id, nextActivo) {
+    const { error } = await supabaseClient
+      .from("inventario_base")
+      .update({ activo: !!nextActivo })
+      .eq("id", id);
+
+    if (error) {
+      console.error("[ADM] inventario_base update activo error:", error);
+      alert("Error actualizando activo. Mirá Console (F12).");
+      return;
+    }
+    await invLoad();
+  }
+
+  async function invEditar(item) {
+    const nLabel = prompt("Editar label:", item.label);
+    if (nLabel === null) return;
+
+    const nValue = prompt("Editar value:", item.value);
+    if (nValue === null) return;
+
+    const nOrdenStr = prompt("Editar orden (número):", String(item.orden ?? 0));
+    if (nOrdenStr === null) return;
+
+    const nOrden = Number(nOrdenStr);
+    if (isNaN(nOrden)) return alert("Orden inválido.");
+
+    const { error } = await supabaseClient
+      .from("inventario_base")
+      .update({ label: nLabel.trim(), value: nValue.trim(), orden: nOrden })
+      .eq("id", item.id);
+
+    if (error) {
+      console.error("[ADM] inventario_base update error:", error);
+      alert("Error editando inventario. Mirá Console (F12).");
+      return;
+    }
+
+    await invLoad();
+  }
+
+  function renderInventarioLista() {
+    if (!invLista) return;
+
+    const rows = inventario
+      .slice()
+      .sort((a, b) =>
+        (a.tipo.localeCompare(b.tipo, "es")) ||
+        (a.orden - b.orden) ||
+        a.label.localeCompare(b.label, "es")
+      );
+
+    if (!rows.length) {
+      invLista.innerHTML = `<div class="muted">Sin ítems. Agregá personal/móviles/elementos arriba.</div>`;
+      return;
+    }
+
+    invLista.innerHTML = rows.map((it) => {
+      const badge = it.activo ? "ACTIVO" : "INACTIVO";
+      return `
+        <div style="border:1px solid #ddd; border-radius:10px; padding:10px; margin:8px 0; background:#fff;">
+          <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+            <div>
+              <div style="font-weight:700;">${esc(it.tipo)} — ${esc(it.label)} <span class="muted">(${esc(it.value)})</span></div>
+              <div class="muted">Orden: ${esc(it.orden)} — Estado: ${badge}</div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button type="button" class="btn-ghost" data-inv-edit="${esc(it.id)}">Editar</button>
+              <button type="button" class="${it.activo ? "btn-danger" : "btn-success"}" data-inv-toggle="${esc(it.id)}" data-next="${it.activo ? "0" : "1"}">
+                ${it.activo ? "Desactivar" : "Activar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    invLista.querySelectorAll("[data-inv-toggle]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-inv-toggle");
+        const next = btn.getAttribute("data-next") === "1";
+        invToggleActivo(id, next).catch((e) => console.error(e));
+      });
+    });
+
+    invLista.querySelectorAll("[data-inv-edit]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-inv-edit");
+        const item = inventario.find((x) => x.id === id);
+        if (!item) return;
+        invEditar(item).catch((e) => console.error(e));
+      });
+    });
+  }
+
+  if (btnInvAgregar) btnInvAgregar.addEventListener("click", () => invInsert().catch((e) => console.error(e)));
+  if (btnInvRefrescar) btnInvRefrescar.addEventListener("click", () => invLoad().catch((e) => console.error(e)));
+
+  if (invLabel && invValue) {
+    invLabel.addEventListener("input", () => {
+      if ((invValue.value || "").trim()) return;
+      invValue.value = slugifyValue(invLabel.value);
+    });
+  }
+
+  // ======================================================
+  // BASE / RETIROS (guardia_store.payload)
+  // ======================================================
   let baseStore = { version: 1, retiros: [] };
   let retiroSeleccionadoId = null;
 
@@ -482,28 +712,72 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (actual && lugares.includes(actual)) selBaseLugar.value = actual;
   }
 
+  function renderChips(container, items, { type, name, prefixId }) {
+    if (!container) return;
+
+    if (!items.length) {
+      container.innerHTML = `<div class="muted">No hay ítems activos en inventario para este bloque.</div>`;
+      return;
+    }
+
+    container.innerHTML = items.map((it, idx) => {
+      const id = `${prefixId}_${idx}`;
+      if (type === "radio") {
+        return `
+          <label class="checkbox-container" style="display:flex; align-items:center; gap:8px; border:1px solid #ddd; padding:6px 10px; border-radius:999px;">
+            <input type="radio" name="${esc(name)}" id="${esc(id)}" value="${esc(it.value)}">
+            <span>${esc(it.label)}</span>
+          </label>
+        `;
+      }
+      return `
+        <label class="checkbox-container" style="display:flex; align-items:center; gap:8px; border:1px solid #ddd; padding:6px 10px; border-radius:999px;">
+          <input type="checkbox" id="${esc(id)}" value="${esc(it.value)}">
+          <span>${esc(it.label)}</span>
+        </label>
+      `;
+    }).join("");
+  }
+
+  function renderChipsDesdeInventario() {
+    renderChips(boxPersonal, invActivos("personal"), { type: "checkbox", prefixId: "per", name: "" });
+    renderChips(boxMovil, invActivos("movil"), { type: "radio", name: "baseMovilRadio", prefixId: "mov" });
+    renderChips(boxElementos, invActivos("elemento"), { type: "checkbox", prefixId: "elm", name: "" });
+  }
+
+  function leerSeleccionCheckbox(container) {
+    if (!container) return [];
+    const inputs = Array.from(container.querySelectorAll('input[type="checkbox"]'));
+    return inputs.filter((i) => i.checked).map((i) => i.value);
+  }
+
+  function leerSeleccionRadio(container, name) {
+    if (!container) return "";
+    const el = container.querySelector(`input[type="radio"][name="${CSS.escape(name)}"]:checked`);
+    return el ? el.value : "";
+  }
+
   function renderBasePreview() {
     if (preBase) preBase.textContent = JSON.stringify(baseStore || {}, null, 2);
 
     const abiertos = (baseStore?.retiros || []).filter((r) => r?.estado === "ABIERTO");
     if (elBaseEstado) elBaseEstado.textContent = `Retiros abiertos: ${abiertos.length}`;
 
-    // lista abiertos
     if (contRetirosAbiertos) {
       if (!abiertos.length) {
         contRetirosAbiertos.innerHTML = `<div class="muted">No hay retiros abiertos.</div>`;
       } else {
         contRetirosAbiertos.innerHTML = abiertos.map((r) => {
           const isSel = retiroSeleccionadoId === r.id;
-          const personal = Array.isArray(r.personal) ? r.personal.join(", ") : String(r.personal || "");
-          const elems = Array.isArray(r.elementos) ? r.elementos.join(", ") : String(r.elementos || "");
+          const personalTxt = Array.isArray(r.personal) ? r.personal.join(", ") : String(r.personal || "");
+          const elemsTxt = Array.isArray(r.elementos) ? r.elementos.join(", ") : String(r.elementos || "");
           return `
             <div data-retiro-id="${esc(r.id)}"
                  style="border:1px solid #ddd; border-radius:10px; padding:10px; margin:8px 0; cursor:pointer; background:${isSel ? "#f0f7ff" : "#fff"}">
-              <div style="font-weight:700;">${esc(r.movil || "SIN MÓVIL")} — ${esc(r.lugar || "SIN LUGAR")}</div>
+              <div style="font-weight:700;">${esc(r.movil_label || r.movil_id || "SIN MÓVIL")} — ${esc(r.lugar || "SIN LUGAR")}</div>
               <div class="muted">Retiro: ${esc(r.hora_retiro || "")} — Fecha: ${esc(r.fecha || "")}</div>
-              <div style="margin-top:6px;"><b>Personal:</b> ${esc(personal || "-")}</div>
-              <div><b>Elementos:</b> ${esc(elems || "-")}</div>
+              <div style="margin-top:6px;"><b>Personal:</b> ${esc(personalTxt || "-")}</div>
+              <div><b>Elementos:</b> ${esc(elemsTxt || "-")}</div>
               <div class="muted" style="margin-top:6px;">(Click para seleccionar y poder cerrar)</div>
             </div>
           `;
@@ -521,15 +795,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (btnCerrarRetiro) btnCerrarRetiro.disabled = !retiroSeleccionadoId;
   }
 
-  async function getSessionOrFail() {
-    const { data: { session }, error } = await supabaseClient.auth.getSession();
-    if (error || !session?.access_token) return null;
-    return session;
-  }
-
-  // lee guardia_store.payload
   async function cargarBaseDesdeServidor() {
-    const session = await getSessionOrFail();
+    const session = await getSessionOrNull();
     if (!session) {
       baseStore = { version: 1, retiros: [] };
       renderBasePreview();
@@ -555,96 +822,35 @@ document.addEventListener("DOMContentLoaded", async () => {
     const data = await r.json();
     const payload = data?.[0]?.payload || null;
 
-    // Normaliza formato
-    if (payload && typeof payload === "object" && Array.isArray(payload.retiros)) {
-      baseStore = payload;
-    } else {
-      baseStore = { version: 1, retiros: [] };
-    }
+    if (payload && typeof payload === "object" && Array.isArray(payload.retiros)) baseStore = payload;
+    else baseStore = { version: 1, retiros: [] };
 
-    // si el retiro seleccionado ya no existe, limpiamos
     const abiertos = baseStore.retiros.filter((x) => x?.estado === "ABIERTO");
     if (retiroSeleccionadoId && !abiertos.some((x) => x.id === retiroSeleccionadoId)) retiroSeleccionadoId = null;
 
     renderBasePreview();
   }
 
-  // guarda guardia_store.payload
   async function guardarBaseEnServidor(nextPayload) {
-    const session = await getSessionOrFail();
+    const session = await getSessionOrNull();
     if (!session) {
       alert("No hay sesión iniciada. Inicie sesión antes de usar Guardia.");
       return false;
     }
 
-    const resp = await fetch(`${SUPABASE_URL}/rest/v1/guardia_store?id=eq.1`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Prefer: "return=representation",
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: "Bearer " + session.access_token,
-      },
-      body: JSON.stringify({ payload: nextPayload, updated_at: new Date().toISOString() }),
-    });
-
-    if (!resp.ok) {
-      const txt = await resp.text();
-      console.error("[ADM] Error guardando baseStore:", resp.status, txt);
-      alert("Error guardando retiros. Mirá Console (F12). Status: " + resp.status);
+    const res = await patchOrInsertStore({ table: "guardia_store", payload: nextPayload, session });
+    if (!res.ok) {
+      console.error("[ADM] Error guardando guardia_store:", res.status, res.text);
+      alert("Error guardando retiros. Mirá Console (F12). Status: " + res.status);
       return false;
     }
 
-    try {
-      const d = await resp.json();
-      baseStore = d?.[0]?.payload ?? nextPayload;
-    } catch {
-      baseStore = nextPayload;
-    }
+    // Intento de leer payload devuelto
+    const p = res.data?.[0]?.payload ?? res.data?.payload ?? null;
+    baseStore = p && typeof p === "object" ? p : nextPayload;
 
     renderBasePreview();
     return true;
-  }
-
-  function renderChips(container, items, { type, name, prefixId }) {
-    if (!container) return;
-
-    if (!items.length) {
-      container.innerHTML = `<div class="muted">No se encontraron datos en datos.js para este bloque.</div>`;
-      return;
-    }
-
-    container.innerHTML = items.map((it, idx) => {
-      const id = `${prefixId}_${idx}`;
-      if (type === "radio") {
-        return `
-          <label class="checkbox-container" style="display:flex; align-items:center; gap:8px; border:1px solid #ddd; padding:6px 10px; border-radius:999px;">
-            <input type="radio" name="${esc(name)}" id="${esc(id)}" value="${esc(it.value)}">
-            <span>${esc(it.label)}</span>
-          </label>
-        `;
-      }
-      // checkbox
-      return `
-        <label class="checkbox-container" style="display:flex; align-items:center; gap:8px; border:1px solid #ddd; padding:6px 10px; border-radius:999px;">
-          <input type="checkbox" id="${esc(id)}" value="${esc(it.value)}">
-          <span>${esc(it.label)}</span>
-        </label>
-      `;
-    }).join("");
-  }
-
-  function leerSeleccionCheckbox(container) {
-    if (!container) return [];
-    const inputs = Array.from(container.querySelectorAll('input[type="checkbox"]'));
-    return inputs.filter((i) => i.checked).map((i) => i.value);
-  }
-
-  function leerSeleccionRadio(container, name) {
-    if (!container) return "";
-    const el = container.querySelector(`input[type="radio"][name="${CSS.escape(name)}"]:checked`);
-    return el ? el.value : "";
   }
 
   function limpiarSeleccionBase() {
@@ -662,32 +868,35 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function onRegistrarRetiro() {
-    // sincroniza store para evitar carreras
-    await cargarBaseDesdeServidor();
+    await cargarBaseDesdeServidor(); // evita carreras
 
     const lugar = normalizarLugar(selBaseLugar?.value);
     const hora_retiro = (inpHoraRetiro?.value || "").trim() || hhmmNow();
 
-    // listas
-    const personal = leerSeleccionCheckbox(boxPersonal);
-    const movil = leerSeleccionRadio(boxMovil, "baseMovilRadio");
-    const elementos = leerSeleccionCheckbox(boxElementos);
+    // ids desde inventario_base
+    const personal_ids = leerSeleccionCheckbox(boxPersonal);
+    const movil_id = leerSeleccionRadio(boxMovil, "baseMovilRadio");
+    const elementos_ids = leerSeleccionCheckbox(boxElementos);
 
     const hora_inicio_prevista = (inpHoraInicioPrev?.value || "").trim() || null;
     const mision = (inpMision?.value || "").trim() || null;
     const obs = (inpObs?.value || "").trim() || null;
 
     if (!lugar) return alert("Seleccioná un lugar.");
-    if (!personal.length) return alert("Seleccioná al menos 1 personal.");
-    if (!movil) return alert("Seleccioná 1 móvil.");
+    if (!personal_ids.length) return alert("Seleccioná al menos 1 personal.");
+    if (!movil_id) return alert("Seleccioná 1 móvil.");
+
+    // snapshots legibles (labels)
+    const personal = personal_ids.map((v) => invLabelFromValue("personal", v));
+    const elementos = elementos_ids.map((v) => invLabelFromValue("elemento", v));
+    const movil_label = invLabelFromValue("movil", movil_id);
 
     // regla: 1 retiro ABIERTO por móvil
-    const ya = (baseStore.retiros || []).find((r) => r?.estado === "ABIERTO" && String(r?.movil) === String(movil));
+    const ya = (baseStore.retiros || []).find((r) => r?.estado === "ABIERTO" && String(r?.movil_id) === String(movil_id));
     if (ya) {
-      const ok = confirm(`Ya existe un RETIRO ABIERTO para el móvil ${movil}.\n\n¿Querés CERRAR el anterior y abrir uno nuevo?`);
+      const ok = confirm(`Ya existe un RETIRO ABIERTO para el móvil ${movil_label}.\n\n¿Querés CERRAR el anterior y abrir uno nuevo?`);
       if (!ok) return;
 
-      // cerrar anterior
       ya.estado = "CERRADO";
       ya.hora_regreso = hhmmNow();
       ya.cierre_ts = new Date().toISOString();
@@ -698,13 +907,22 @@ document.addEventListener("DOMContentLoaded", async () => {
       estado: "ABIERTO",
       fecha: ymdToday(),
       hora_retiro,
-      movil,
       lugar,
+
+      // ids (para autocompletar WSP sin ambigüedad)
+      personal_ids,
+      movil_id,
+      elementos_ids,
+
+      // labels (para lectura humana)
       personal,
+      movil_label,
       elementos,
+
       hora_inicio_prevista,
       mision_prevista: mision,
       observaciones: obs,
+
       retiro_ts: new Date().toISOString(),
       cierre_ts: null,
       hora_regreso: null,
@@ -713,7 +931,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const next = {
       ...baseStore,
       version: 1,
-      retiros: [retiro, ...(baseStore.retiros || [])], // último arriba
+      retiros: [retiro, ...(baseStore.retiros || [])],
     };
 
     const okSave = await guardarBaseEnServidor(next);
@@ -749,55 +967,46 @@ document.addEventListener("DOMContentLoaded", async () => {
     alert("RETIRO cerrado (ingreso de regreso).");
   }
 
-  function initListasDesdeDatos() {
-    // Ajuste: cambiá estas claves si tu datos.js usa otros nombres
-    const personalRaw = getListaDesdeDatos(["personal", "PERSONAL", "efectivos", "numerarios", "PERSONAL_LIST"]);
-    const movilesRaw = getListaDesdeDatos(["moviles", "MOVILES", "movilesDisponibles", "MOVILES_LIST", "mobiles"]);
-    const elementosRaw = getListaDesdeDatos(["elementos", "ELEMENTOS", "equipo", "EQUIPO", "ELEMENTOS_LIST"]);
-
-    const personal = buildItems(personalRaw);
-    const moviles = buildItems(movilesRaw);
-    const elementos = buildItems(elementosRaw);
-
-    renderChips(boxPersonal, personal, { type: "checkbox", prefixId: "per", name: "" });
-    renderChips(boxMovil, moviles, { type: "radio", name: "baseMovilRadio", prefixId: "mov" });
-    renderChips(boxElementos, elementos, { type: "checkbox", prefixId: "elm", name: "" });
-  }
-
   if (btnRegistrarRetiro) btnRegistrarRetiro.addEventListener("click", () => onRegistrarRetiro().catch((e) => console.error(e)));
   if (btnCerrarRetiro) btnCerrarRetiro.addEventListener("click", () => onCerrarRetiro().catch((e) => console.error(e)));
   if (btnRefrescarRetiros) btnRefrescarRetiros.addEventListener("click", () => cargarBaseDesdeServidor().catch((e) => console.error(e)));
 
   // ======================================================
-  // CONTROL DE SESIÓN + INIT
+  // INIT
   // ======================================================
-  function initAdm() {
+  async function initAdm() {
     limpiarOrdenesCaducadas();
     actualizarSelector();
     cambiosId = 0;
     ultimoPublicadoId = 0;
     actualizarEstadoPublicar();
 
-    // Base / retiros
+    // base / retiros
     if (inpHoraRetiro) inpHoraRetiro.value = hhmmNow();
     cargarLugaresBase();
-    initListasDesdeDatos();
 
+    // preview base vacío, después carga real
     baseStore = { version: 1, retiros: [] };
     retiroSeleccionadoId = null;
     renderBasePreview();
-    cargarBaseDesdeServidor();
+
+    // inventario -> chips -> retiros
+    await invLoad();
+    await cargarBaseDesdeServidor();
   }
 
-  const { data: { session }, error } = await supabaseClient.auth.getSession();
+  // ======================================================
+  // CONTROL DE SESIÓN + BOOT
+  // ======================================================
+  const session = await getSessionOrNull();
 
-  if (error || !session) {
+  if (!session) {
     if (loginContainer) loginContainer.style.display = "block";
     if (admContainer) admContainer.style.display = "none";
   } else {
     if (loginContainer) loginContainer.style.display = "none";
     if (admContainer) admContainer.style.display = "block";
-    initAdm();
+    await initAdm();
   }
 
   // ======================================================
@@ -830,7 +1039,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       if (loginContainer) loginContainer.style.display = "none";
       if (admContainer) admContainer.style.display = "block";
-      initAdm();
+      await initAdm();
     });
   }
 
@@ -852,6 +1061,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // Por defecto dejá “Órdenes” como tab inicial
+  // Tab inicial
   activarTab("ordenes");
 });
