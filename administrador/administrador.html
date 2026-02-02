@@ -33,6 +33,7 @@
       <div class="tabs">
         <button type="button" class="tab-btn is-active" data-tab="ordenes">Órdenes</button>
         <button type="button" class="tab-btn" data-tab="guardia">Guardia</button>
+        <button type="button" class="tab-btn" data-tab="inventario">Inventario</button>
       </div>
 
       <button id="btnLogout" class="btn-ghost">Cerrar sesión</button>
@@ -69,13 +70,8 @@
       </div>
 
       <div class="row">
-        <button type="button" class="btn-primary" onclick="agregarOrden()">
-          Agregar / Actualizar Orden
-        </button>
-
-        <button type="button" id="btnPublicarOrdenes" class="btn-success" onclick="publicarOrdenes()">
-          Publicar órdenes
-        </button>
+        <button type="button" class="btn-primary" onclick="agregarOrden()">Agregar / Actualizar Orden</button>
+        <button type="button" id="btnPublicarOrdenes" class="btn-success" onclick="publicarOrdenes()">Publicar órdenes</button>
       </div>
 
       <hr>
@@ -91,11 +87,103 @@
     <section id="tab-guardia" class="tab-panel">
       <h2>Guardia</h2>
       <p class="muted">
-        Retiro de Base: seleccionás personal, móvil y elementos desde inventario (Supabase) y se guarda como preset (para que WSP autocomplete el inicio).
+        Armás Patrulla 1 / Patrulla 2 con inventario (Supabase) y se guarda en <b>guardia_estado</b> para que WSP autocomplete por defecto.
       </p>
 
-      <!-- ===================== INVENTARIO (Supabase) ===================== -->
-      <h3>Inventario (listas para checkbox)</h3>
+      <div class="row" style="gap:10px; align-items:center;">
+        <button type="button" id="btnGuardiaGuardar" class="btn-primary">Guardar Guardia (publicar defaults)</button>
+        <button type="button" id="btnGuardiaActualizar" class="btn-success">Actualizar</button>
+        <div class="muted" id="guardiaEstadoTxt">—</div>
+      </div>
+
+      <hr>
+
+      <!-- PATRULLA 1 -->
+      <div class="guardia-box" style="display:block; margin-bottom:14px;">
+        <h3 style="margin-top:0;">Patrulla 1</h3>
+
+        <div class="row" style="gap:10px; align-items:flex-end;">
+          <div style="flex:1;">
+            <label for="p1Lugar">Lugar (desde órdenes)</label>
+            <select id="p1Lugar" class="full">
+              <option value="">Seleccionar lugar</option>
+            </select>
+          </div>
+          <div style="flex:1;">
+            <label for="p1Obs">Observaciones (opcional)</label>
+            <input id="p1Obs" type="text" class="full" placeholder="Ej: sale con impresora 05 y alcohómetro…">
+          </div>
+        </div>
+
+        <div class="row" style="gap:10px; margin-top:10px;">
+          <button type="button" class="btn-ghost" data-accion="PRESENTE" data-p="p1">Presente</button>
+          <button type="button" class="btn-primary" data-accion="SALEN" data-p="p1">Salen</button>
+          <button type="button" class="btn-success" data-accion="INGRESAN" data-p="p1">Ingresan</button>
+          <button type="button" class="btn-danger" data-accion="FRANCO" data-p="p1">Franco</button>
+        </div>
+
+        <label style="margin-top:10px;">Personal</label>
+        <div id="p1Personal" class="full" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+
+        <label style="margin-top:10px;">Móviles (podés seleccionar más de uno)</label>
+        <div id="p1Moviles" class="full"></div>
+
+        <label style="margin-top:10px;">Elementos</label>
+        <div id="p1Elementos" class="full"></div>
+
+        <label style="margin-top:10px;">Cartuchos (solo si hay escopeta)</label>
+        <div id="p1Cartuchos" class="full"></div>
+      </div>
+
+      <!-- PATRULLA 2 -->
+      <div class="guardia-box" style="display:block;">
+        <h3 style="margin-top:0;">Patrulla 2</h3>
+
+        <div class="row" style="gap:10px; align-items:flex-end;">
+          <div style="flex:1;">
+            <label for="p2Lugar">Lugar (desde órdenes)</label>
+            <select id="p2Lugar" class="full">
+              <option value="">Seleccionar lugar</option>
+            </select>
+          </div>
+          <div style="flex:1;">
+            <label for="p2Obs">Observaciones (opcional)</label>
+            <input id="p2Obs" type="text" class="full" placeholder="Ej: sale con alcohómetro y HT…">
+          </div>
+        </div>
+
+        <div class="row" style="gap:10px; margin-top:10px;">
+          <button type="button" class="btn-ghost" data-accion="PRESENTE" data-p="p2">Presente</button>
+          <button type="button" class="btn-primary" data-accion="SALEN" data-p="p2">Salen</button>
+          <button type="button" class="btn-success" data-accion="INGRESAN" data-p="p2">Ingresan</button>
+          <button type="button" class="btn-danger" data-accion="FRANCO" data-p="p2">Franco</button>
+        </div>
+
+        <label style="margin-top:10px;">Personal</label>
+        <div id="p2Personal" class="full" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+
+        <label style="margin-top:10px;">Móviles</label>
+        <div id="p2Moviles" class="full"></div>
+
+        <label style="margin-top:10px;">Elementos</label>
+        <div id="p2Elementos" class="full"></div>
+
+        <label style="margin-top:10px;">Cartuchos (solo si hay escopeta)</label>
+        <div id="p2Cartuchos" class="full"></div>
+      </div>
+
+      <hr>
+
+      <h3>Salida JSON (preview)</h3>
+      <pre id="guardiaJsonPreview" class="json-preview">{}</pre>
+    </section>
+
+    <!-- ===================== TAB: INVENTARIO ===================== -->
+    <section id="tab-inventario" class="tab-panel">
+      <h2>Inventario</h2>
+      <p class="muted">
+        Editás inventario de base en Supabase (inventario_base). Los subgrupos se guardan en <code>meta.subgrupo</code>.
+      </p>
 
       <div class="guardia-box" style="display:block;">
         <div class="row" style="gap:10px; align-items:flex-end;">
@@ -122,6 +210,27 @@
             <label for="invOrden">Orden</label>
             <input id="invOrden" type="number" class="full" value="0">
           </div>
+        </div>
+
+        <div class="row" style="gap:10px; margin-top:10px; align-items:flex-end;">
+          <div style="width:240px;">
+            <label for="invSubgrupo">Subgrupo (solo elementos)</label>
+            <select id="invSubgrupo" class="full">
+              <option value="">—</option>
+              <option value="Alometros">Alometros</option>
+              <option value="Alcoholimetros">Alcoholimetros</option>
+              <option value="Pda">Pda</option>
+              <option value="Impresoras">Impresoras</option>
+              <option value="Ht">Ht</option>
+              <option value="Escopetas">Escopetas</option>
+              <option value="Cartuchos">Cartuchos</option>
+            </select>
+          </div>
+
+          <div style="flex:1;">
+            <label for="invMetaExtra">Meta extra (JSON opcional)</label>
+            <input id="invMetaExtra" type="text" class="full" placeholder='Ej: {"cartucho_tipo":"AT"} / {"revista":"efectivo"} / {"tvf":"1234...","venc":"02/27"}'>
+          </div>
 
           <div style="width:160px;">
             <button type="button" id="btnInvAgregar" class="btn-primary">Agregar</button>
@@ -135,71 +244,6 @@
 
         <div id="invLista" class="full" style="margin-top:10px;"></div>
       </div>
-
-      <hr>
-
-      <!-- ===================== RETIRO BASE ===================== -->
-      <h3>Retiro de Base</h3>
-
-      <div class="guardia-box" style="display:block;">
-        <div style="margin-bottom:10px;">
-          <div class="label">Estado</div>
-          <div id="baseEstado" class="value">Cargando…</div>
-        </div>
-
-        <div class="row" style="gap:10px; align-items:flex-end;">
-          <div style="flex:1;">
-            <label for="baseLugar">Lugar (desde órdenes)</label>
-            <select id="baseLugar" class="full">
-              <option value="">Seleccionar lugar</option>
-            </select>
-          </div>
-
-          <div style="width:160px;">
-            <label for="baseHoraRetiro">Hora retiro</label>
-            <input id="baseHoraRetiro" type="time" class="full">
-          </div>
-
-          <div style="width:160px;">
-            <label for="baseHoraInicioPrev">Hora inicio (opcional)</label>
-            <input id="baseHoraInicioPrev" type="time" class="full">
-          </div>
-        </div>
-
-        <label style="margin-top:10px;">Personal (checkbox)</label>
-        <div id="basePersonalList" class="full" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
-
-        <label style="margin-top:10px;">Móvil (selección única)</label>
-        <div id="baseMovilList" class="full" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
-
-        <label style="margin-top:10px;">Elementos (checkbox)</label>
-        <div id="baseElementosList" class="full" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
-
-        <div class="row" style="gap:10px; margin-top:10px;">
-          <div style="flex:1;">
-            <label for="baseMision">Misión (opcional)</label>
-            <input id="baseMision" type="text" class="full" placeholder="Ej: Control vehicular / Presencia activa">
-          </div>
-          <div style="flex:1;">
-            <label for="baseObs">Observaciones (opcional)</label>
-            <input id="baseObs" type="text" class="full" placeholder="Ej: sale con impresora 05 y alcohómetro…">
-          </div>
-        </div>
-
-        <div class="row" style="gap:10px; margin-top:12px;">
-          <button type="button" id="btnRegistrarRetiro" class="btn-primary">Registrar RETIRO (ABIERTO)</button>
-          <button type="button" id="btnCerrarRetiro" class="btn-ghost">Cerrar RETIRO (Ingreso de regreso)</button>
-          <button type="button" id="btnRefrescarRetiros" class="btn-success">Actualizar</button>
-        </div>
-      </div>
-
-      <hr>
-
-      <h3>Retiros abiertos</h3>
-      <div id="retirosAbiertosList" class="full"></div>
-
-      <h3>Salida JSON (preview)</h3>
-      <pre id="baseJsonPreview" class="json-preview">{}</pre>
     </section>
 
     <!-- shared scripts (orden correcto) -->
@@ -220,3 +264,7 @@
   </div>
 </body>
 </html>
+  </div>
+</body>
+</html>
+
