@@ -150,6 +150,45 @@ document.addEventListener("DOMContentLoaded", async () => {
   const loginPassword = document.getElementById("loginPassword");
   const loginError = document.getElementById("loginError");
 
+  // ======================================================
+  // SUBTABS PATRULLAS (UI) - NUEVO
+  // ======================================================
+  function bindSubtabsPatrullas() {
+    const btns = Array.from(document.querySelectorAll(".subtab-btn[data-subtab]"));
+    const panelP1 = document.getElementById("patrulla-p1");
+    const panelP2 = document.getElementById("patrulla-p2");
+
+    // Si el HTML no tiene la nueva estructura, no hacemos nada.
+    if (!btns.length || (!panelP1 && !panelP2)) return;
+
+    function setActive(key) {
+      const k = (key === "p2") ? "p2" : "p1";
+
+      btns.forEach((b) => b.classList.toggle("is-active", b.getAttribute("data-subtab") === k));
+
+      if (panelP1) panelP1.classList.toggle("is-active", k === "p1");
+      if (panelP2) panelP2.classList.toggle("is-active", k === "p2");
+
+      // respaldo de display por si tu CSS inline queda mezclado
+      if (panelP1) panelP1.style.display = (k === "p1") ? "block" : "none";
+      if (panelP2) panelP2.style.display = (k === "p2") ? "block" : "none";
+
+      try { localStorage.setItem("adm_patrulla_activa", k); } catch {}
+    }
+
+    btns.forEach((b) => {
+      b.addEventListener("click", () => {
+        const k = b.getAttribute("data-subtab");
+        setActive(k);
+      });
+    });
+
+    // restaurar última selección
+    let last = "p1";
+    try { last = localStorage.getItem("adm_patrulla_activa") || "p1"; } catch {}
+    setActive(last);
+  }
+
   // ===== TABS =====
   const tabBtns = Array.from(document.querySelectorAll(".tab-btn"));
   const tabPanels = {
@@ -161,6 +200,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   function activarTab(nombre) {
     tabBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.tab === nombre));
     Object.keys(tabPanels).forEach((k) => tabPanels[k]?.classList.toggle("is-active", k === nombre));
+
+    // cuando entro a Guardia, aseguro que las subsolapas queden aplicadas
+    if (nombre === "guardia") bindSubtabsPatrullas();
   }
 
   tabBtns.forEach((b) => b.addEventListener("click", () => activarTab(b.dataset.tab)));
@@ -966,6 +1008,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // aplicar defaults guardados
     aplicarStateAGuardiaUI();
+
+    // asegurar visibilidad correcta si estás en Guardia
+    bindSubtabsPatrullas();
   }
 
   function readCheckedValues(container) {
@@ -1091,6 +1136,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2.elementos_ids);
 
     renderGuardiaPreview();
+
+    // mantener panel correcto
+    bindSubtabsPatrullas();
   }
 
   function aplicarReglaCartuchos(elContainer, cartContainer, elementos_ids_override) {
@@ -1296,6 +1344,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     bindReglaCartuchosLive();
 
     renderGuardiaPreview();
+
+    // activar subsolapas patrullas (si existen)
+    bindSubtabsPatrullas();
   }
 
   // ======================================================
