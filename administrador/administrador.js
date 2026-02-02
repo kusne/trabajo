@@ -155,7 +155,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const tabPanels = {
     ordenes: document.getElementById("tab-ordenes"),
     guardia: document.getElementById("tab-guardia"),
-    inventario: document.getElementById("tab-inventario"),
+    inventario: document.getElementById("tab-inventario"), // si no existe, no rompe
   };
 
   function activarTab(nombre) {
@@ -461,12 +461,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       .sort((a, b) => (a.orden - b.orden) || a.label.localeCompare(b.label, "es"));
   }
 
-  function invByTipo(tipo) {
-    return inventario
-      .filter((x) => x.tipo === tipo)
-      .sort((a, b) => (a.orden - b.orden) || a.label.localeCompare(b.label, "es"));
-  }
-
   function invLabelFromValue(tipo, value) {
     const r = inventario.find((x) => x.tipo === tipo && x.value === value);
     return r ? r.label : value;
@@ -513,7 +507,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!label) return alert("Label: obligatorio.");
     if (!value) value = slugifyValue(label);
 
-    // meta armado según tipo
     const meta = {};
 
     if (tipo === "elemento") {
@@ -685,7 +678,61 @@ document.addEventListener("DOMContentLoaded", async () => {
   const p2Elementos = document.getElementById("p2Elementos");
   const p2Cartuchos = document.getElementById("p2Cartuchos");
 
-  const SUBGRUPOS_ORDEN = ["Alometros", "Alcoholimetros", "Pda", "Impresoras", "Ht", "Escopetas", "Cartuchos"];
+  // ======================================================
+  // SUBGRUPOS (CANON + ORDEN FIJO)
+  // ======================================================
+  const SUBGRUPO_CANON = [
+    { key: "alometros",       label: "Alometros" },
+    { key: "alcoholimetros",  label: "Alcoholimetros" },
+    { key: "pdas",            label: "PDAs" },
+    { key: "impresoras",      label: "Impresoras" },
+    { key: "ht",              label: "Ht" },
+    { key: "escopetas",       label: "Escopetas" },
+    { key: "cartuchos",       label: "Cartuchos" },
+  ];
+
+  const SUBGRUPO_KEY_TO_LABEL = new Map(SUBGRUPO_CANON.map(x => [x.key, x.label]));
+  const SUBGRUPOS_ORDEN = SUBGRUPO_CANON.map(x => x.label); // orden por label canónico
+
+  function normalizeKey(s) {
+    return String(s || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[áàäâ]/g, "a")
+      .replace(/[éèëê]/g, "e")
+      .replace(/[íìïî]/g, "i")
+      .replace(/[óòöô]/g, "o")
+      .replace(/[úùüû]/g, "u")
+      .replace(/ñ/g, "n")
+      .replace(/[^a-z0-9]+/g, "");
+  }
+
+  function canonSubgrupo(raw) {
+    const k = normalizeKey(raw);
+
+    if (!k) return "SinSubgrupo";
+
+    // sinónimos / tolerancias
+    if (k === "pda" || k === "pdas") return "PDAs";
+    if (k === "alometro" || k === "alometros") return "Alometros";
+    if (k === "alcoholimetro" || k === "alcoholimetros") return "Alcoholimetros";
+    if (k === "impresora" || k === "impresoras") return "Impresoras";
+    if (k === "ht" || k === "handy" || k === "handytalkie" || k === "handywalkie") return "Ht";
+    if (k === "escopeta" || k === "escopetas") return "Escopetas";
+    if (k === "cartucho" || k === "cartuchos") return "Cartuchos";
+
+    // si coincide exacto con los canónicos por key
+    if (SUBGRUPO_KEY_TO_LABEL.has(k)) return SUBGRUPO_KEY_TO_LABEL.get(k);
+
+    // fallback: usar el raw original (pero “limpio”) para no perder datos
+    const cleaned = String(raw || "").trim();
+    return cleaned || "SinSubgrupo";
+  }
+
+  function isSubgrupo(item, labelCanon) {
+    const sg = canonSubgrupo(item?.meta?.subgrupo);
+    return sg === labelCanon;
+  }
 
   let guardiaState = {
     version: 1,
@@ -756,7 +803,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    // Cada móvil: checkbox "usar" + libro/llave/tvf
     container.innerHTML = moviles.map((m, idx) => {
       const baseId = `${prefix}_mov_${idx}`;
       return `
@@ -784,7 +830,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       `;
     }).join("");
 
-    // habilita flags si el móvil está seleccionado
     container.querySelectorAll('input[data-movil-pick="1"]').forEach((chk) => {
       chk.addEventListener("change", () => {
         const movilId = chk.getAttribute("data-movil-id");
@@ -798,22 +843,34 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
+  // ======================================================
+  // ELEMENTOS: AGRUPAR POR meta.subgrupo (CANON) + TÍTULOS
+  // ======================================================
   function groupElementos(elementosActivos) {
-    const groups = new Map(); // subgrupo -> items
+    const groups = new Map(); // sgCanon -> items
+
     (elementosActivos || []).forEach((e) => {
-      const sg = String(e?.meta?.subgrupo || "SinSubgrupo").trim() || "SinSubgrupo";
-      if (!groups.has(sg)) groups.set(sg, []);
-      groups.get(sg).push(e);
+      const sgCanon = canonSubgrupo(e?.meta?.subgrupo);
+      if (!groups.has(sgCanon)) groups.set(sgCanon, []);
+      groups.get(sgCanon).push(e);
     });
 
-    // orden fijo + el resto al final
+    // ordenar items dentro de cada grupo por orden, label
+    for (const [k, arr] of groups.entries()) {
+      arr.sort((a, b) => (a.orden - b.orden) || String(a.label).localeCompare(String(b.label), "es"));
+      groups.set(k, arr);
+    }
+
+    // orden fijo de grupos (los canónicos primero)
     const ordered = [];
     SUBGRUPOS_ORDEN.forEach((sg) => {
       if (groups.has(sg)) ordered.push([sg, groups.get(sg)]);
     });
+
+    // el resto (subgrupos no conocidos) al final ordenados alfabéticamente
     Array.from(groups.keys())
       .filter((k) => !SUBGRUPOS_ORDEN.includes(k))
-      .sort((a,b)=>a.localeCompare(b,"es"))
+      .sort((a, b) => a.localeCompare(b, "es"))
       .forEach((k) => ordered.push([k, groups.get(k)]));
 
     return ordered;
@@ -853,10 +910,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
-    // Cartuchos: checkbox + cantidad (disabled si no check)
     container.innerHTML = cartuchosItems.map((c, idx) => {
       const id = `${prefix}_car_${idx}`;
-      const tipo = String(c?.meta?.cartucho_tipo || "").toUpperCase(); // AT / PG si lo pusiste
+      const tipo = String(c?.meta?.cartucho_tipo || "").toUpperCase(); // AT / PG
       return `
         <div style="display:flex; align-items:center; gap:10px; border:1px solid #ddd; border-radius:12px; padding:8px 10px; margin:6px 0; background:#fff;">
           <label style="display:flex; align-items:center; gap:8px; min-width:260px;">
@@ -898,17 +954,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderMoviles(p1Moviles, moviles, { prefix: "p1" });
     renderMoviles(p2Moviles, moviles, { prefix: "p2" });
 
-    // elementos por subgrupo (excepto Cartuchos, los manejamos aparte)
-    const elementosNoCart = elementos.filter((e) => String(e?.meta?.subgrupo || "").trim() !== "Cartuchos");
+    // elementos por subgrupo (excepto Cartuchos)
+    const elementosNoCart = elementos.filter((e) => !isSubgrupo(e, "Cartuchos"));
     renderElementos(p1Elementos, elementosNoCart, { prefix: "p1_el" });
     renderElementos(p2Elementos, elementosNoCart, { prefix: "p2_el" });
 
-    // cartuchos
-    const cartuchos = elementos.filter((e) => String(e?.meta?.subgrupo || "").trim() === "Cartuchos");
+    // cartuchos (solo subgrupo Cartuchos, normalizado)
+    const cartuchos = elementos.filter((e) => isSubgrupo(e, "Cartuchos"));
     renderCartuchos(p1Cartuchos, cartuchos, { prefix: "p1" });
     renderCartuchos(p2Cartuchos, cartuchos, { prefix: "p2" });
 
-    // aplicar defaults guardados (si ya cargamos guardiaState)
+    // aplicar defaults guardados
     aplicarStateAGuardiaUI();
   }
 
@@ -920,7 +976,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   function readMoviles(container) {
-    if (!container) return [];
     if (!container) return [];
 
     const picks = Array.from(container.querySelectorAll('input[data-movil-pick="1"]'));
@@ -955,18 +1010,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   function patrullaTieneEscopeta(elementos_ids) {
-    const escopetas = invActivos("elemento").filter((e) => String(e?.meta?.subgrupo || "").trim() === "Escopetas");
+    const escopetas = invActivos("elemento").filter((e) => isSubgrupo(e, "Escopetas"));
     const escIds = new Set(escopetas.map((x) => x.value));
     return (elementos_ids || []).some((id) => escIds.has(id));
   }
 
   function aplicarStateAGuardiaUI() {
-    // p1
-    if (p1Lugar) p1Lugar.value = guardiaState?.patrullas?.p1?.lugar || "";
-    if (p1Obs) p1Obs.value = guardiaState?.patrullas?.p1?.obs || "";
-
     const p1 = guardiaState?.patrullas?.p1 || {};
     const p2 = guardiaState?.patrullas?.p2 || {};
+
+    if (p1Lugar) p1Lugar.value = p1.lugar || "";
+    if (p1Obs) p1Obs.value = p1.obs || "";
+    if (p2Lugar) p2Lugar.value = p2.lugar || "";
+    if (p2Obs) p2Obs.value = p2.obs || "";
 
     // personal
     (p1Personal?.querySelectorAll('input[type="checkbox"]') || []).forEach((x) => {
@@ -985,7 +1041,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         const m = byId.get(String(id));
         chk.checked = !!m;
 
-        // disparar el handler para habilitar flags
         chk.dispatchEvent(new Event("change"));
 
         if (m) {
@@ -1006,7 +1061,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     function applyElems(container, ids) {
       if (!container) return;
       container.querySelectorAll('input[type="checkbox"]').forEach((chk) => {
-        // OJO: dentro de elementos usamos value; dentro de chipsCheckbox se setea value del inventario
         if (!chk.value) return;
         chk.checked = Array.isArray(ids) && ids.includes(chk.value);
       });
@@ -1049,7 +1103,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const hayEscopeta = patrullaTieneEscopeta(elementos_ids);
 
-    // si no hay escopeta: deshabilitar y limpiar
     cartContainer.querySelectorAll('input[data-cartucho-pick="1"]').forEach((chk) => {
       chk.disabled = !hayEscopeta;
       if (!hayEscopeta) chk.checked = false;
@@ -1059,7 +1112,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!hayEscopeta) inp.value = "";
     });
 
-    // si hay escopeta, permitir (pero solo habilita qty cuando el checkbox está tildado)
     if (hayEscopeta) {
       cartContainer.querySelectorAll('input[data-cartucho-pick="1"]').forEach((chk) => {
         chk.disabled = false;
@@ -1083,7 +1135,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     const p1Elem = readCheckedValues(p1Elementos);
     const p2Elem = readCheckedValues(p2Elementos);
 
-    // aplicar regla cartuchos según escopeta
     aplicarReglaCartuchos(p1Elementos, p1Cartuchos, p1Elem);
     aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2Elem);
 
@@ -1117,7 +1168,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   async function cargarGuardiaDesdeServidor() {
     const session = await getSessionOrNull();
-    // lectura pública por RLS: podrías leer sin token, pero lo dejamos así
     const headers = {
       apikey: SUPABASE_ANON_KEY,
       Accept: "application/json",
@@ -1129,7 +1179,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!r.ok) {
       const txt = await r.text();
       console.warn("[ADM] No se pudo leer guardia_estado:", r.status, txt);
-      // no rompemos, dejamos el state local
       renderGuardiaPreview();
       return;
     }
@@ -1139,7 +1188,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (payload && typeof payload === "object") {
       guardiaState = payload;
-      // normaliza campos mínimos
       guardiaState.version = guardiaState.version || 1;
       guardiaState.patrullas = guardiaState.patrullas || {
         p1: { lugar: "", obs: "", estado: "", estado_ts: "", personal_ids: [], moviles: [], elementos_ids: [], cartuchos: {} },
@@ -1180,13 +1228,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   async function onActualizarGuardia() {
-    // refresca inventario y state
     await invLoad();
     cargarLugaresParaGuardia();
     await cargarGuardiaDesdeServidor();
   }
 
-  // Acciones de estado (Presente/Salen/Ingresan/Franco)
   function bindAccionesEstado() {
     document.querySelectorAll("[data-accion][data-p]").forEach((btn) => {
       btn.addEventListener("click", async () => {
@@ -1194,7 +1240,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         const p = btn.getAttribute("data-p"); // p1 / p2
         if (!accion || !p) return;
 
-        // construir estado desde UI primero (para que log tenga el resumen actual)
         const next = buildStateFromUI();
 
         const ts = isoNow();
@@ -1204,7 +1249,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         next.patrullas[p].estado = accion;
         next.patrullas[p].estado_ts = ts;
 
-        // resumen mínimo (después lo refinamos para “Libro Memorandum”)
         const pat = next.patrullas[p];
         const perTxt = (pat.personal_ids || []).map((id) => invLabelFromValue("personal", id)).join(", ");
         const movTxt = (pat.moviles || []).map((m) => invLabelFromValue("movil", m.movil_id)).join(", ");
@@ -1224,7 +1268,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   if (btnGuardiaGuardar) btnGuardiaGuardar.addEventListener("click", () => onGuardarGuardia().catch(console.error));
   if (btnGuardiaActualizar) btnGuardiaActualizar.addEventListener("click", () => onActualizarGuardia().catch(console.error));
 
-  // Si cambian elementos, recalculamos regla de cartuchos
   function bindReglaCartuchosLive() {
     const hook = (elContainer, cartContainer) => {
       if (!elContainer || !cartContainer) return;
@@ -1244,10 +1287,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     ultimoPublicadoId = 0;
     actualizarEstadoPublicar();
 
-    // lugares (guardia)
     cargarLugaresParaGuardia();
 
-    // inventario + guardia
     await invLoad();
     await cargarGuardiaDesdeServidor();
 
@@ -1326,7 +1367,3 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Tab inicial
   activarTab("ordenes");
 });
-  // Tab inicial
-  activarTab("ordenes");
-});
-
