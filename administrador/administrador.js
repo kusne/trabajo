@@ -47,7 +47,7 @@ function normalizarLugar(l) {
 
 function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;"
   }[c]));
 }
 
@@ -134,7 +134,7 @@ async function patchOrInsertStore({ table, payload, session }) {
   }
 
   let data = null;
-  try { data = await resp.json(); } catch {}
+  try { data = await resp.json(); } catch { }
   return { ok: true, data };
 }
 
@@ -151,58 +151,94 @@ document.addEventListener("DOMContentLoaded", async () => {
   const loginError = document.getElementById("loginError");
 
   // ======================================================
-  // SUBTABS PATRULLAS (UI) - NUEVO
+  // SUBSOLAPAS GUARDIA: Patrulla 1 / Patrulla 2 (ROBUSTO)
   // ======================================================
-  function bindSubtabsPatrullas() {
-    const btns = Array.from(document.querySelectorAll(".subtab-btn[data-subtab]"));
-    const panelP1 = document.getElementById("patrulla-p1");
-    const panelP2 = document.getElementById("patrulla-p2");
+  const SubtabsPatrullas = (() => {
+    let bound = false;
+    let active = "p1";
 
-    // Si el HTML no tiene la nueva estructura, no hacemos nada.
-    if (!btns.length || (!panelP1 && !panelP2)) return;
+    let btns = [];
+    let panelP1 = null;
+    let panelP2 = null;
 
-    function setActive(key) {
-      const k = (key === "p2") ? "p2" : "p1";
-
-      btns.forEach((b) => b.classList.toggle("is-active", b.getAttribute("data-subtab") === k));
-
-      if (panelP1) panelP1.classList.toggle("is-active", k === "p1");
-      if (panelP2) panelP2.classList.toggle("is-active", k === "p2");
-
-      // respaldo de display por si tu CSS inline queda mezclado
-      if (panelP1) panelP1.style.display = (k === "p1") ? "block" : "none";
-      if (panelP2) panelP2.style.display = (k === "p2") ? "block" : "none";
-
-      try { localStorage.setItem("adm_patrulla_activa", k); } catch {}
+    function refreshRefs() {
+      btns = Array.from(document.querySelectorAll('.subtab-btn[data-subtab]'));
+      panelP1 = document.getElementById("patrulla-p1");
+      panelP2 = document.getElementById("patrulla-p2");
     }
 
-    btns.forEach((b) => {
-      b.addEventListener("click", () => {
-        const k = b.getAttribute("data-subtab");
-        setActive(k);
-      });
-    });
+    function forceDisplay(el, show) {
+      if (!el) return;
+      el.classList.toggle("is-active", !!show);
 
-    // restaurar última selección
-    let last = "p1";
-    try { last = localStorage.getItem("adm_patrulla_activa") || "p1"; } catch {}
-    setActive(last);
-  }
+      // CLAVE: pisar incluso CSS con !important
+      el.style.setProperty("display", show ? "block" : "none", "important");
+    }
+
+    function setActive(key, { save = true } = {}) {
+      const k = (key === "p2") ? "p2" : "p1";
+      active = k;
+
+      btns.forEach((b) => {
+        b.classList.toggle("is-active", b.getAttribute("data-subtab") === k);
+      });
+
+      forceDisplay(panelP1, k === "p1");
+      forceDisplay(panelP2, k === "p2");
+
+      if (save) {
+        try { localStorage.setItem("adm_patrulla_activa", k); } catch { }
+      }
+    }
+
+    function ensureBound() {
+      refreshRefs();
+
+      // si el HTML no tiene subsolapas, no hacemos nada
+      if (!btns.length || (!panelP1 && !panelP2)) return;
+
+      if (!bound) {
+        btns.forEach((b) => {
+          b.addEventListener("click", () => setActive(b.getAttribute("data-subtab"), { save: true }));
+        });
+        bound = true;
+      }
+
+      // restaurar selección
+      let last = "p1";
+      try { last = localStorage.getItem("adm_patrulla_activa") || "p1"; } catch { }
+      setActive(last, { save: false });
+    }
+
+    function apply() {
+      // aplica el estado actual sin rebindeo
+      refreshRefs();
+      if (!btns.length || (!panelP1 && !panelP2)) return;
+      setActive(active, { save: false });
+    }
+
+    function getActive() { return active; }
+
+    return { ensureBound, apply, setActive, getActive };
+  })();
 
   // ===== TABS =====
   const tabBtns = Array.from(document.querySelectorAll(".tab-btn"));
   const tabPanels = {
     ordenes: document.getElementById("tab-ordenes"),
     guardia: document.getElementById("tab-guardia"),
-    inventario: document.getElementById("tab-inventario"), // si no existe, no rompe
+    inventario: document.getElementById("tab-inventario"),
   };
 
   function activarTab(nombre) {
     tabBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.tab === nombre));
     Object.keys(tabPanels).forEach((k) => tabPanels[k]?.classList.toggle("is-active", k === nombre));
 
-    // cuando entro a Guardia, aseguro que las subsolapas queden aplicadas
-    if (nombre === "guardia") bindSubtabsPatrullas();
+    // cuando entro a Guardia, aplico sí o sí subsolapas
+    if (nombre === "guardia") {
+      SubtabsPatrullas.ensureBound();
+      SubtabsPatrullas.apply();
+    }
   }
 
   tabBtns.forEach((b) => b.addEventListener("click", () => activarTab(b.dataset.tab)));
@@ -724,17 +760,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   // SUBGRUPOS (CANON + ORDEN FIJO)
   // ======================================================
   const SUBGRUPO_CANON = [
-    { key: "alometros",       label: "Alometros" },
-    { key: "alcoholimetros",  label: "Alcoholimetros" },
-    { key: "pdas",            label: "PDAs" },
-    { key: "impresoras",      label: "Impresoras" },
-    { key: "ht",              label: "Ht" },
-    { key: "escopetas",       label: "Escopetas" },
-    { key: "cartuchos",       label: "Cartuchos" },
+    { key: "alometros", label: "Alometros" },
+    { key: "alcoholimetros", label: "Alcoholimetros" },
+    { key: "pdas", label: "PDAs" },
+    { key: "impresoras", label: "Impresoras" },
+    { key: "ht", label: "Ht" },
+    { key: "escopetas", label: "Escopetas" },
+    { key: "cartuchos", label: "Cartuchos" },
   ];
 
   const SUBGRUPO_KEY_TO_LABEL = new Map(SUBGRUPO_CANON.map(x => [x.key, x.label]));
-  const SUBGRUPOS_ORDEN = SUBGRUPO_CANON.map(x => x.label); // orden por label canónico
+  const SUBGRUPOS_ORDEN = SUBGRUPO_CANON.map(x => x.label);
 
   function normalizeKey(s) {
     return String(s || "")
@@ -751,10 +787,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function canonSubgrupo(raw) {
     const k = normalizeKey(raw);
-
     if (!k) return "SinSubgrupo";
 
-    // sinónimos / tolerancias
     if (k === "pda" || k === "pdas") return "PDAs";
     if (k === "alometro" || k === "alometros") return "Alometros";
     if (k === "alcoholimetro" || k === "alcoholimetros") return "Alcoholimetros";
@@ -763,10 +797,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (k === "escopeta" || k === "escopetas") return "Escopetas";
     if (k === "cartucho" || k === "cartuchos") return "Cartuchos";
 
-    // si coincide exacto con los canónicos por key
     if (SUBGRUPO_KEY_TO_LABEL.has(k)) return SUBGRUPO_KEY_TO_LABEL.get(k);
 
-    // fallback: usar el raw original (pero “limpio”) para no perder datos
     const cleaned = String(raw || "").trim();
     return cleaned || "SinSubgrupo";
   }
@@ -889,7 +921,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ELEMENTOS: AGRUPAR POR meta.subgrupo (CANON) + TÍTULOS
   // ======================================================
   function groupElementos(elementosActivos) {
-    const groups = new Map(); // sgCanon -> items
+    const groups = new Map();
 
     (elementosActivos || []).forEach((e) => {
       const sgCanon = canonSubgrupo(e?.meta?.subgrupo);
@@ -897,19 +929,16 @@ document.addEventListener("DOMContentLoaded", async () => {
       groups.get(sgCanon).push(e);
     });
 
-    // ordenar items dentro de cada grupo por orden, label
     for (const [k, arr] of groups.entries()) {
       arr.sort((a, b) => (a.orden - b.orden) || String(a.label).localeCompare(String(b.label), "es"));
       groups.set(k, arr);
     }
 
-    // orden fijo de grupos (los canónicos primero)
     const ordered = [];
     SUBGRUPOS_ORDEN.forEach((sg) => {
       if (groups.has(sg)) ordered.push([sg, groups.get(sg)]);
     });
 
-    // el resto (subgrupos no conocidos) al final ordenados alfabéticamente
     Array.from(groups.keys())
       .filter((k) => !SUBGRUPOS_ORDEN.includes(k))
       .sort((a, b) => a.localeCompare(b, "es"))
@@ -954,7 +983,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     container.innerHTML = cartuchosItems.map((c, idx) => {
       const id = `${prefix}_car_${idx}`;
-      const tipo = String(c?.meta?.cartucho_tipo || "").toUpperCase(); // AT / PG
+      const tipo = String(c?.meta?.cartucho_tipo || "").toUpperCase();
       return `
         <div style="display:flex; align-items:center; gap:10px; border:1px solid #ddd; border-radius:12px; padding:8px 10px; margin:6px 0; background:#fff;">
           <label style="display:flex; align-items:center; gap:8px; min-width:260px;">
@@ -988,29 +1017,24 @@ document.addEventListener("DOMContentLoaded", async () => {
     const moviles = invActivos("movil");
     const elementos = invActivos("elemento");
 
-    // personal
     chipsCheckbox(p1Personal, personal, { prefix: "p1_per" });
     chipsCheckbox(p2Personal, personal, { prefix: "p2_per" });
 
-    // móviles + flags
     renderMoviles(p1Moviles, moviles, { prefix: "p1" });
     renderMoviles(p2Moviles, moviles, { prefix: "p2" });
 
-    // elementos por subgrupo (excepto Cartuchos)
     const elementosNoCart = elementos.filter((e) => !isSubgrupo(e, "Cartuchos"));
     renderElementos(p1Elementos, elementosNoCart, { prefix: "p1_el" });
     renderElementos(p2Elementos, elementosNoCart, { prefix: "p2_el" });
 
-    // cartuchos (solo subgrupo Cartuchos, normalizado)
     const cartuchos = elementos.filter((e) => isSubgrupo(e, "Cartuchos"));
     renderCartuchos(p1Cartuchos, cartuchos, { prefix: "p1" });
     renderCartuchos(p2Cartuchos, cartuchos, { prefix: "p2" });
 
-    // aplicar defaults guardados
     aplicarStateAGuardiaUI();
 
-    // asegurar visibilidad correcta si estás en Guardia
-    bindSubtabsPatrullas();
+    // Re-aplicar subsolapa activa (sin rebindeo)
+    SubtabsPatrullas.apply();
   }
 
   function readCheckedValues(container) {
@@ -1043,7 +1067,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   function readCartuchos(container) {
     if (!container) return {};
     const picks = Array.from(container.querySelectorAll('input[data-cartucho-pick="1"]'));
-    const out = {}; // value -> qty
+    const out = {};
     picks.forEach((p) => {
       if (!p.checked) return;
       const id = p.getAttribute("data-cartucho-id");
@@ -1069,7 +1093,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (p2Lugar) p2Lugar.value = p2.lugar || "";
     if (p2Obs) p2Obs.value = p2.obs || "";
 
-    // personal
     (p1Personal?.querySelectorAll('input[type="checkbox"]') || []).forEach((x) => {
       x.checked = Array.isArray(p1.personal_ids) && p1.personal_ids.includes(x.value);
     });
@@ -1077,7 +1100,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       x.checked = Array.isArray(p2.personal_ids) && p2.personal_ids.includes(x.value);
     });
 
-    // móviles
     function applyMov(container, movArr) {
       if (!container) return;
       const byId = new Map((movArr || []).map((m) => [String(m.movil_id), m]));
@@ -1102,7 +1124,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     applyMov(p1Moviles, p1.moviles);
     applyMov(p2Moviles, p2.moviles);
 
-    // elementos (no cartuchos)
     function applyElems(container, ids) {
       if (!container) return;
       container.querySelectorAll('input[type="checkbox"]').forEach((chk) => {
@@ -1114,7 +1135,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     applyElems(p1Elementos, p1.elementos_ids);
     applyElems(p2Elementos, p2.elementos_ids);
 
-    // cartuchos: check + qty
     function applyCart(container, map) {
       if (!container) return;
       const m = map || {};
@@ -1131,14 +1151,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     applyCart(p1Cartuchos, p1.cartuchos_map);
     applyCart(p2Cartuchos, p2.cartuchos_map);
 
-    // regla: cartuchos solo si hay escopeta
     aplicarReglaCartuchos(p1Elementos, p1Cartuchos, p1.elementos_ids);
     aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2.elementos_ids);
 
     renderGuardiaPreview();
 
     // mantener panel correcto
-    bindSubtabsPatrullas();
+    SubtabsPatrullas.apply();
   }
 
   function aplicarReglaCartuchos(elContainer, cartContainer, elementos_ids_override) {
@@ -1279,13 +1298,16 @@ document.addEventListener("DOMContentLoaded", async () => {
     await invLoad();
     cargarLugaresParaGuardia();
     await cargarGuardiaDesdeServidor();
+
+    // si estás en guardia, re-aplicá subsolapas
+    SubtabsPatrullas.apply();
   }
 
   function bindAccionesEstado() {
     document.querySelectorAll("[data-accion][data-p]").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const accion = btn.getAttribute("data-accion");
-        const p = btn.getAttribute("data-p"); // p1 / p2
+        const p = btn.getAttribute("data-p");
         if (!accion || !p) return;
 
         const next = buildStateFromUI();
@@ -1337,6 +1359,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     cargarLugaresParaGuardia();
 
+    // Subsolapas: bind una sola vez si existen
+    SubtabsPatrullas.ensureBound();
+
     await invLoad();
     await cargarGuardiaDesdeServidor();
 
@@ -1345,8 +1370,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     renderGuardiaPreview();
 
-    // activar subsolapas patrullas (si existen)
-    bindSubtabsPatrullas();
+    // aplicar visibilidad final
+    SubtabsPatrullas.apply();
   }
 
   // ======================================================
