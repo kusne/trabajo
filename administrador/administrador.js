@@ -151,62 +151,60 @@ document.addEventListener("DOMContentLoaded", async () => {
   const loginError = document.getElementById("loginError");
 
   // ======================================================
-  // SUBSOLAPAS GUARDIA: Patrulla 1 / Patrulla 2 (REPARADO)
+  // HARD UI CONTROL (tabs + subtabs) - NO DEPENDE DE CSS
+  // ======================================================
+
+  function setDisplayImportant(el, show) {
+    if (!el) return;
+    el.classList.toggle("is-active", !!show);
+    el.style.setProperty("display", show ? "block" : "none", "important");
+  }
+
+  // ======================================================
+  // SUBSOLAPAS GUARDIA: Patrulla 1 / Patrulla 2 (ROBUSTO)
   // ======================================================
   const SubtabsPatrullas = (() => {
     let bound = false;
     let active = "p1";
 
     let btns = [];
-    let panelP1 = null;
-    let panelP2 = null;
-
-    function scope() {
-      return document.getElementById("tab-guardia") || document;
-    }
+    let panelsByKey = new Map();
 
     function refreshRefs() {
-      const sc = scope();
-      btns = Array.from(sc.querySelectorAll('.subtab-btn[data-subtab]'));
-      panelP1 = document.getElementById("patrulla-p1");
-      panelP2 = document.getElementById("patrulla-p2");
-    }
+      btns = Array.from(document.querySelectorAll('.subtab-btn[data-subtab]'));
+      panelsByKey = new Map();
 
-    function sanitizeButtons() {
-      // Asegura que P1 y P2 no estén disabled por accidente.
-      btns.forEach((b) => {
-        const k = b.getAttribute("data-subtab");
-        if (k === "p1" || k === "p2") {
-          b.disabled = false;
-          b.removeAttribute("disabled");
-          b.style.pointerEvents = "auto";
-        }
-        // p3 queda como venga desde HTML (generalmente disabled)
+      // soporta N patrullas: id="patrulla-p1", "patrulla-p2", etc.
+      const panels = Array.from(document.querySelectorAll('#tab-guardia .patrulla-panel[id^="patrulla-"]'));
+      panels.forEach((p) => {
+        const id = p.id || "";
+        const m = id.match(/^patrulla-(p\d+)$/);
+        if (!m) return;
+        panelsByKey.set(m[1], p);
+
+        // limpiamos restos viejos (por si quedó style="display:block" en HTML anterior)
+        p.style.removeProperty("display");
       });
-    }
-
-    function forceDisplay(el, show) {
-      if (!el) return;
-
-      el.classList.toggle("is-active", !!show);
-      el.setAttribute("aria-hidden", show ? "false" : "true");
-
-      // CLAVE: pisar inline/CSS con !important
-      el.style.setProperty("display", show ? "block" : "none", "important");
     }
 
     function setActive(key, { save = true } = {}) {
+      refreshRefs();
+
       const k = (key === "p2") ? "p2" : "p1";
       active = k;
 
+      // botones
       btns.forEach((b) => {
-        const isOn = b.getAttribute("data-subtab") === k;
-        b.classList.toggle("is-active", isOn);
-        b.setAttribute("aria-selected", isOn ? "true" : "false");
+        const bk = b.getAttribute("data-subtab");
+        b.classList.toggle("is-active", bk === k);
+        // no tocamos disabled salvo que venga mal del HTML
+        if (bk === "p2" && b.disabled) b.disabled = false;
       });
 
-      forceDisplay(panelP1, k === "p1");
-      forceDisplay(panelP2, k === "p2");
+      // paneles: ocultar todos, mostrar solo el activo
+      for (const [pk, panel] of panelsByKey.entries()) {
+        setDisplayImportant(panel, pk === k);
+      }
 
       if (save) {
         try { localStorage.setItem("adm_patrulla_activa", k); } catch { }
@@ -216,40 +214,26 @@ document.addEventListener("DOMContentLoaded", async () => {
     function ensureBound() {
       refreshRefs();
 
-      if (!btns.length || (!panelP1 && !panelP2)) return;
-
-      sanitizeButtons();
+      if (!btns.length || !panelsByKey.size) return;
 
       if (!bound) {
         btns.forEach((b) => {
-          b.addEventListener("click", (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+          b.addEventListener("click", () => {
             const k = b.getAttribute("data-subtab");
+            if (!k || b.disabled) return;
             setActive(k, { save: true });
-
-            // re-aplica 1 frame después para evitar “ambos visibles”
-            requestAnimationFrame(() => setActive(k, { save: false }));
-          }, { passive: false });
+          });
         });
         bound = true;
       }
 
-      // restaurar selección
       let last = "p1";
       try { last = localStorage.getItem("adm_patrulla_activa") || "p1"; } catch { }
       setActive(last, { save: false });
-
-      // blindaje extra
-      requestAnimationFrame(() => setActive(last, { save: false }));
     }
 
     function apply() {
-      refreshRefs();
-      if (!btns.length || (!panelP1 && !panelP2)) return;
-      sanitizeButtons();
       setActive(active, { save: false });
-      requestAnimationFrame(() => setActive(active, { save: false }));
     }
 
     function getActive() { return active; }
@@ -267,13 +251,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function activarTab(nombre) {
     tabBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.tab === nombre));
-    Object.keys(tabPanels).forEach((k) => tabPanels[k]?.classList.toggle("is-active", k === nombre));
 
-    // cuando entro a Guardia, aplico sí o sí subsolapas (y re-aplico 1 frame después)
+    // 🔥 clave: ocultar/mostrar por JS (aunque administrador.css no cargue)
+    Object.keys(tabPanels).forEach((k) => {
+      const panel = tabPanels[k];
+      setDisplayImportant(panel, k === nombre);
+    });
+
     if (nombre === "guardia") {
       SubtabsPatrullas.ensureBound();
       SubtabsPatrullas.apply();
-      requestAnimationFrame(() => SubtabsPatrullas.apply());
     }
   }
 
@@ -300,7 +287,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // ======================================================
-  // ÓRDENES (sin tocar lógica actual)
+  // ÓRDENES
   // ======================================================
   let cambiosId = 0;
   let ultimoPublicadoId = 0;
@@ -753,7 +740,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     invLista.querySelectorAll("[data-inv-edit]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = btn.getAttribute("data-inv-edit");
-        const item = inventario.find((x) => x.id === id);
+        const item = inventario.find((x) => String(x.id) === String(id));
         if (!item) return;
         invEditar(item).catch((e) => console.error(e));
       });
@@ -953,9 +940,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // ======================================================
-  // ELEMENTOS: AGRUPAR POR meta.subgrupo (CANON) + TÍTULOS
-  // ======================================================
   function groupElementos(elementosActivos) {
     const groups = new Map();
 
@@ -992,7 +976,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const grouped = groupElementos(elementosActivos);
 
-    container.innerHTML = grouped.map(([sg, items]) => {
+    container.innerHTML = grouped.map(([sg]) => {
       const listId = `${prefix}_sg_${slugifyValue(sg)}`;
       return `
         <div style="border:1px solid #e5e5e5; border-radius:14px; padding:10px; margin:10px 0; background:#fff;">
@@ -1069,7 +1053,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     aplicarStateAGuardiaUI();
 
-    // Re-aplicar subsolapa activa
     SubtabsPatrullas.apply();
   }
 
@@ -1118,6 +1101,38 @@ document.addEventListener("DOMContentLoaded", async () => {
     const escopetas = invActivos("elemento").filter((e) => isSubgrupo(e, "Escopetas"));
     const escIds = new Set(escopetas.map((x) => x.value));
     return (elementos_ids || []).some((id) => escIds.has(id));
+  }
+
+  function aplicarReglaCartuchos(elContainer, cartContainer, elementos_ids_override) {
+    if (!cartContainer) return;
+
+    const elementos_ids =
+      Array.isArray(elementos_ids_override)
+        ? elementos_ids_override
+        : readCheckedValues(elContainer);
+
+    const hayEscopeta = patrullaTieneEscopeta(elementos_ids);
+
+    cartContainer.querySelectorAll('input[data-cartucho-pick="1"]').forEach((chk) => {
+      chk.disabled = !hayEscopeta;
+      if (!hayEscopeta) chk.checked = false;
+    });
+    cartContainer.querySelectorAll('input[data-cartucho-qty="1"]').forEach((inp) => {
+      inp.disabled = true;
+      if (!hayEscopeta) inp.value = "";
+    });
+
+    if (hayEscopeta) {
+      cartContainer.querySelectorAll('input[data-cartucho-pick="1"]').forEach((chk) => {
+        chk.disabled = false;
+        chk.dispatchEvent(new Event("change"));
+      });
+    }
+  }
+
+  function renderGuardiaPreview() {
+    if (preGuardia) preGuardia.textContent = JSON.stringify(guardiaState || {}, null, 2);
+    if (guardiaEstadoTxt) guardiaEstadoTxt.textContent = `Última actualización: ${guardiaState.updated_at_ts || "—"}`;
   }
 
   function aplicarStateAGuardiaUI() {
@@ -1193,38 +1208,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     renderGuardiaPreview();
 
     SubtabsPatrullas.apply();
-  }
-
-  function aplicarReglaCartuchos(elContainer, cartContainer, elementos_ids_override) {
-    if (!cartContainer) return;
-
-    const elementos_ids =
-      Array.isArray(elementos_ids_override)
-        ? elementos_ids_override
-        : readCheckedValues(elContainer);
-
-    const hayEscopeta = patrullaTieneEscopeta(elementos_ids);
-
-    cartContainer.querySelectorAll('input[data-cartucho-pick="1"]').forEach((chk) => {
-      chk.disabled = !hayEscopeta;
-      if (!hayEscopeta) chk.checked = false;
-    });
-    cartContainer.querySelectorAll('input[data-cartucho-qty="1"]').forEach((inp) => {
-      inp.disabled = true;
-      if (!hayEscopeta) inp.value = "";
-    });
-
-    if (hayEscopeta) {
-      cartContainer.querySelectorAll('input[data-cartucho-pick="1"]').forEach((chk) => {
-        chk.disabled = false;
-        chk.dispatchEvent(new Event("change"));
-      });
-    }
-  }
-
-  function renderGuardiaPreview() {
-    if (preGuardia) preGuardia.textContent = JSON.stringify(guardiaState || {}, null, 2);
-    if (guardiaEstadoTxt) guardiaEstadoTxt.textContent = `Última actualización: ${guardiaState.updated_at_ts || "—"}`;
   }
 
   function buildStateFromUI() {
@@ -1333,7 +1316,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     await invLoad();
     cargarLugaresParaGuardia();
     await cargarGuardiaDesdeServidor();
-
     SubtabsPatrullas.apply();
   }
 
@@ -1393,7 +1375,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     cargarLugaresParaGuardia();
 
-    // Subsolapas: bind una sola vez si existen
     SubtabsPatrullas.ensureBound();
 
     await invLoad();
@@ -1404,7 +1385,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     renderGuardiaPreview();
 
-    // aplicar visibilidad final
     SubtabsPatrullas.apply();
   }
 
@@ -1474,6 +1454,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // Tab inicial
+  // Tab inicial (se aplica con display por JS)
   activarTab("ordenes");
 });
