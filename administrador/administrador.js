@@ -1,17 +1,17 @@
 // ===== PUENTE GLOBAL (NO SE ROMPE CON DOMContentLoaded NI CON PISADAS) =====
 window.agregarOrden = function () {
   if (typeof window.__adm_agregarOrden === "function") return window.__adm_agregarOrden();
-  alert("ADM no inicializó agregarOrden. Hacé Ctrl+F5.");
+  alert("Administrador no inicializó agregarOrden. Hacé Ctrl+F5.");
 };
 
 window.publicarOrdenes = function () {
   if (typeof window.__adm_publicarOrdenes === "function") return window.__adm_publicarOrdenes();
-  alert("ADM no inicializó publicarOrdenes. Hacé Ctrl+F5.");
+  alert("Administrador no inicializó publicarOrdenes. Hacé Ctrl+F5.");
 };
 
-console.log("ADM/administrador.js cargado OK - puente global activo");
+console.log("administrador.js cargado OK - puente global activo");
 
-// ===== CONFIG SUPABASE (SOLO ADM) =====
+// ===== CONFIG SUPABASE (SOLO ADMIN) =====
 const SUPABASE_URL = "https://ugeydxozfewzhldjbkat.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_ZeLC2rOxhhUXlQdvJ28JkA_qf802-pX";
 
@@ -77,6 +77,11 @@ function isoNow() {
   return new Date().toISOString();
 }
 
+function cloneDeep(obj) {
+  if (typeof structuredClone === "function") return structuredClone(obj);
+  return JSON.parse(JSON.stringify(obj || {}));
+}
+
 async function getSessionOrNull() {
   const { data: { session }, error } = await supabaseClient.auth.getSession();
   if (error || !session?.access_token) return null;
@@ -139,7 +144,7 @@ async function patchOrInsertStore({ table, payload, session }) {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  // ===== CONTENEDORES LOGIN / ADM =====
+  // ===== CONTENEDORES LOGIN / ADMIN =====
   const loginContainer = document.getElementById("loginContainer");
   const admContainer = document.getElementById("admContainer");
 
@@ -151,94 +156,83 @@ document.addEventListener("DOMContentLoaded", async () => {
   const loginError = document.getElementById("loginError");
 
   // ======================================================
-  // HARD UI CONTROL (tabs + subtabs) - NO DEPENDE DE CSS
-  // ======================================================
-
-  function setDisplayImportant(el, show) {
-    if (!el) return;
-    el.classList.toggle("is-active", !!show);
-    el.style.setProperty("display", show ? "block" : "none", "important");
-  }
-
-  // ======================================================
-  // SUBSOLAPAS GUARDIA: Patrulla 1 / Patrulla 2 (ROBUSTO)
+  // SUBSOLAPAS GUARDIA: Patrulla 1 / Patrulla 2 (ARREGLADO EN SERIO)
+  // - Delegación de eventos (no se pierde)
+  // - Fuerza display con !important
+  // - Levanta disabled si por algún motivo lo pusieron
   // ======================================================
   const SubtabsPatrullas = (() => {
-    let bound = false;
     let active = "p1";
+    let hooked = false;
 
-    let btns = [];
-    let panelsByKey = new Map();
+    function refs() {
+      const guardiaPanel = document.getElementById("tab-guardia");
+      const btns = Array.from(document.querySelectorAll('.subtab-btn[data-subtab]'));
+      const p1 = document.getElementById("patrulla-p1");
+      const p2 = document.getElementById("patrulla-p2");
+      return { guardiaPanel, btns, p1, p2 };
+    }
 
-    function refreshRefs() {
-      btns = Array.from(document.querySelectorAll('.subtab-btn[data-subtab]'));
-      panelsByKey = new Map();
-
-      // soporta N patrullas: id="patrulla-p1", "patrulla-p2", etc.
-      const panels = Array.from(document.querySelectorAll('#tab-guardia .patrulla-panel[id^="patrulla-"]'));
-      panels.forEach((p) => {
-        const id = p.id || "";
-        const m = id.match(/^patrulla-(p\d+)$/);
-        if (!m) return;
-        panelsByKey.set(m[1], p);
-
-        // limpiamos restos viejos (por si quedó style="display:block" en HTML anterior)
-        p.style.removeProperty("display");
-      });
+    function forceDisplay(el, show) {
+      if (!el) return;
+      el.classList.toggle("is-active", !!show);
+      el.style.setProperty("display", show ? "block" : "none", "important");
     }
 
     function setActive(key, { save = true } = {}) {
-      refreshRefs();
-
       const k = (key === "p2") ? "p2" : "p1";
       active = k;
 
-      // botones
+      const { btns, p1, p2 } = refs();
+
+      // Blindaje: si Patrulla 2 quedó disabled por algo externo, lo levantamos
       btns.forEach((b) => {
-        const bk = b.getAttribute("data-subtab");
-        b.classList.toggle("is-active", bk === k);
-        // no tocamos disabled salvo que venga mal del HTML
-        if (bk === "p2" && b.disabled) b.disabled = false;
+        const sk = b.getAttribute("data-subtab");
+        if (sk === "p2") b.disabled = false;
       });
 
-      // paneles: ocultar todos, mostrar solo el activo
-      for (const [pk, panel] of panelsByKey.entries()) {
-        setDisplayImportant(panel, pk === k);
-      }
+      btns.forEach((b) => {
+        b.classList.toggle("is-active", b.getAttribute("data-subtab") === k);
+      });
+
+      // Ocultá uno y mostrà el otro, SIEMPRE
+      forceDisplay(p1, k === "p1");
+      forceDisplay(p2, k === "p2");
 
       if (save) {
         try { localStorage.setItem("adm_patrulla_activa", k); } catch { }
       }
     }
 
-    function ensureBound() {
-      refreshRefs();
+    function boot() {
+      const { btns, p1, p2 } = refs();
+      if (!btns.length || (!p1 && !p2)) return;
 
-      if (!btns.length || !panelsByKey.size) return;
-
-      if (!bound) {
-        btns.forEach((b) => {
-          b.addEventListener("click", () => {
-            const k = b.getAttribute("data-subtab");
-            if (!k || b.disabled) return;
-            setActive(k, { save: true });
-          });
-        });
-        bound = true;
-      }
-
+      // Estado inicial desde storage
       let last = "p1";
       try { last = localStorage.getItem("adm_patrulla_activa") || "p1"; } catch { }
       setActive(last, { save: false });
+
+      // Hook global una sola vez (delegación)
+      if (!hooked) {
+        document.addEventListener("click", (e) => {
+          const btn = e.target.closest('.subtab-btn[data-subtab]');
+          if (!btn) return;
+          if (btn.disabled) return;
+          setActive(btn.getAttribute("data-subtab"), { save: true });
+        });
+        hooked = true;
+      }
     }
 
     function apply() {
+      // Re-impone el estado actual (por si algo lo pisa)
       setActive(active, { save: false });
     }
 
     function getActive() { return active; }
 
-    return { ensureBound, apply, setActive, getActive };
+    return { boot, apply, setActive, getActive };
   })();
 
   // ===== TABS =====
@@ -251,15 +245,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function activarTab(nombre) {
     tabBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.tab === nombre));
-
-    // 🔥 clave: ocultar/mostrar por JS (aunque administrador.css no cargue)
-    Object.keys(tabPanels).forEach((k) => {
-      const panel = tabPanels[k];
-      setDisplayImportant(panel, k === nombre);
-    });
+    Object.keys(tabPanels).forEach((k) => tabPanels[k]?.classList.toggle("is-active", k === nombre));
 
     if (nombre === "guardia") {
-      SubtabsPatrullas.ensureBound();
+      SubtabsPatrullas.boot();
       SubtabsPatrullas.apply();
     }
   }
@@ -528,7 +517,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (!resp.ok) {
       const txt = await resp.text();
-      console.error("[ADM] Publicar órdenes error:", resp.status, txt);
+      console.error("[ADMIN] Publicar órdenes error:", resp.status, txt);
       alert("Error publicando. Mirá Console (F12). Status: " + resp.status);
       return;
     }
@@ -584,7 +573,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       .order("label", { ascending: true });
 
     if (error) {
-      console.error("[ADM] inventario_base load error:", error);
+      console.error("[ADMIN] inventario_base load error:", error);
       if (invEstado) invEstado.textContent = "Error cargando inventario (mirá Console).";
       inventario = [];
       renderInventarioLista();
@@ -631,7 +620,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const { error } = await supabaseClient.from("inventario_base").insert([payload]);
 
     if (error) {
-      console.error("[ADM] inventario_base insert error:", error);
+      console.error("[ADMIN] inventario_base insert error:", error);
       alert("Error agregando inventario. Mirá Console (F12).\n\nDetalle: " + (error.message || ""));
       return;
     }
@@ -652,7 +641,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       .eq("id", id);
 
     if (error) {
-      console.error("[ADM] inventario_base update activo error:", error);
+      console.error("[ADMIN] inventario_base update activo error:", error);
       alert("Error actualizando activo. Mirá Console (F12).");
       return;
     }
@@ -683,7 +672,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       .eq("id", item.id);
 
     if (error) {
-      console.error("[ADM] inventario_base update error:", error);
+      console.error("[ADMIN] inventario_base update error:", error);
       alert("Error editando inventario. Mirá Console (F12).");
       return;
     }
@@ -834,8 +823,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   let guardiaState = {
     version: 1,
     patrullas: {
-      p1: { lugar: "", obs: "", estado: "", estado_ts: "", personal_ids: [], moviles: [], elementos_ids: [], cartuchos: { at: 0, pg: 0 } },
-      p2: { lugar: "", obs: "", estado: "", estado_ts: "", personal_ids: [], moviles: [], elementos_ids: [], cartuchos: { at: 0, pg: 0 } },
+      p1: { lugar: "", obs: "", estado: "", estado_ts: "", personal_ids: [], moviles: [], elementos_ids: [], cartuchos_map: {} },
+      p2: { lugar: "", obs: "", estado: "", estado_ts: "", personal_ids: [], moviles: [], elementos_ids: [], cartuchos_map: {} },
     },
     log: [],
     updated_at_ts: "",
@@ -976,7 +965,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const grouped = groupElementos(elementosActivos);
 
-    container.innerHTML = grouped.map(([sg]) => {
+    container.innerHTML = grouped.map(([sg, items]) => {
       const listId = `${prefix}_sg_${slugifyValue(sg)}`;
       return `
         <div style="border:1px solid #e5e5e5; border-radius:14px; padding:10px; margin:10px 0; background:#fff;">
@@ -1053,6 +1042,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     aplicarStateAGuardiaUI();
 
+    // CRÍTICO: reimponer subsolapa activa siempre
+    SubtabsPatrullas.boot();
     SubtabsPatrullas.apply();
   }
 
@@ -1207,6 +1198,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     renderGuardiaPreview();
 
+    // CRÍTICO: mantener panel correcto
+    SubtabsPatrullas.boot();
     SubtabsPatrullas.apply();
   }
 
@@ -1226,7 +1219,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const p1CartMap = readCartuchos(p1Cartuchos);
     const p2CartMap = readCartuchos(p2Cartuchos);
 
-    const next = structuredClone(guardiaState || {});
+    const next = cloneDeep(guardiaState || {});
     next.version = 1;
     next.updated_at_ts = isoNow();
 
@@ -1263,7 +1256,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (!r.ok) {
       const txt = await r.text();
-      console.warn("[ADM] No se pudo leer guardia_estado:", r.status, txt);
+      console.warn("[ADMIN] No se pudo leer guardia_estado:", r.status, txt);
       renderGuardiaPreview();
       return;
     }
@@ -1275,8 +1268,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       guardiaState = payload;
       guardiaState.version = guardiaState.version || 1;
       guardiaState.patrullas = guardiaState.patrullas || {
-        p1: { lugar: "", obs: "", estado: "", estado_ts: "", personal_ids: [], moviles: [], elementos_ids: [], cartuchos: {} },
-        p2: { lugar: "", obs: "", estado: "", estado_ts: "", personal_ids: [], moviles: [], elementos_ids: [], cartuchos: {} },
+        p1: { lugar: "", obs: "", estado: "", estado_ts: "", personal_ids: [], moviles: [], elementos_ids: [], cartuchos_map: {} },
+        p2: { lugar: "", obs: "", estado: "", estado_ts: "", personal_ids: [], moviles: [], elementos_ids: [], cartuchos_map: {} },
       };
       guardiaState.log = Array.isArray(guardiaState.log) ? guardiaState.log : [];
       guardiaState.updated_at_ts = guardiaState.updated_at_ts || "";
@@ -1294,7 +1287,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const res = await patchOrInsertStore({ table: "guardia_estado", payload: nextPayload, session });
     if (!res.ok) {
-      console.error("[ADM] Error guardando guardia_estado:", res.status, res.text);
+      console.error("[ADMIN] Error guardando guardia_estado:", res.status, res.text);
       alert("Error guardando Guardia. Mirá Console (F12). Status: " + res.status);
       return false;
     }
@@ -1316,6 +1309,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     await invLoad();
     cargarLugaresParaGuardia();
     await cargarGuardiaDesdeServidor();
+
+    SubtabsPatrullas.boot();
     SubtabsPatrullas.apply();
   }
 
@@ -1343,7 +1338,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const resumen = `Personal: ${perTxt || "-"} | Movil(es): ${movTxt || "-"} | Elementos: ${elemTxt || "-"}`;
 
         next.log = Array.isArray(next.log) ? next.log : [];
-        next.log.unshift({ patrulla: p.toUpperCase(), accion, hora, ts, resumen });
+        next.log.unshift({ patrulla: String(p).toUpperCase(), accion, hora, ts, resumen });
 
         await guardarGuardiaEnServidor(next);
         aplicarStateAGuardiaUI();
@@ -1375,7 +1370,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     cargarLugaresParaGuardia();
 
-    SubtabsPatrullas.ensureBound();
+    // Subsolapas: activar SIEMPRE al iniciar
+    SubtabsPatrullas.boot();
+    SubtabsPatrullas.apply();
 
     await invLoad();
     await cargarGuardiaDesdeServidor();
@@ -1385,6 +1382,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     renderGuardiaPreview();
 
+    // aplicar visibilidad final
+    SubtabsPatrullas.boot();
     SubtabsPatrullas.apply();
   }
 
@@ -1437,13 +1436,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // ======================================================
-  // OLVIDÉ MI CONTRASEÑA (robusto para cualquier repo)
+  // OLVIDÉ MI CONTRASEÑA
   // ======================================================
   if (btnForgot) {
     btnForgot.addEventListener("click", async () => {
       const email = (loginEmail?.value || "").trim();
       if (!email) return alert("Escribí tu email primero.");
 
+      // primer carpeta del path = nombre del repo en GitHub Pages
       const repoName = location.pathname.split("/")[1] || "";
       const redirectTo = repoName ? `${location.origin}/${repoName}/reset.html` : `${location.origin}/reset.html`;
 
@@ -1454,6 +1454,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // Tab inicial (se aplica con display por JS)
+  // Tab inicial
   activarTab("ordenes");
 });
