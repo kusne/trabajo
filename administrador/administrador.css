@@ -1,5 +1,6 @@
 /* administrador.css */
 
+/* ===================== TOPBAR + TABS ===================== */
 .topbar{
   display:flex;
   align-items:center;
@@ -39,6 +40,7 @@
   display:block;
 }
 
+/* ===================== UTILIDADES ===================== */
 .row{
   display:flex;
   gap:10px;
@@ -49,6 +51,12 @@
 
 .full{ width:100%; }
 
+.muted{
+  color:#6b7280;
+  margin-top:-6px;
+}
+
+/* ===================== BOTONES ===================== */
 .btn-primary_toggle, .btn-primary{
   background:#111827;
   color:#fff;
@@ -86,37 +94,73 @@
   cursor:pointer;
 }
 
-.muted{
-  color:#6b7280;
-  margin-top:-6px;
-}
-
-/* ✅ CONTENEDOR PRINCIPAL DE GUARDIA (PATRULLA PANEL / INVENTARIO BOX)
-   Antes estaba en flex y te rompía todo el layout.
-*/
+/* ===================== GUARDIA BOX ===================== */
+/* OJO: esto NO debe ser flex para formularios (patrullas, inventario) */
 .guardia-box{
   margin-top:12px;
   padding:12px;
   border:1px solid #e5e7eb;
   border-radius:14px;
   background:#fff;
-
-  /* clave: que sea contenedor normal */
-  display:block;
+  display:block; /* clave */
 }
 
-/* (si todavía usás acciones en una fila dentro de alguna guardia-box) */
+/* si en algún lugar usás un bloque de acciones dentro */
 .guardia-actions{
   display:flex;
   gap:10px;
   align-items:center;
 }
 
-/* ✅ Subsolapas patrullas: que el CSS base ya soporte el comportamiento */
-.patrulla-panel{ display:none; }
-.patrulla-panel.is-active{ display:block; }
+/* ===================== SUBSOLAPAS PATRULLAS ===================== */
+/* (si ya las definís inline en el HTML, igual no molesta que estén acá también) */
+.subtabs{
+  display:flex;
+  gap:8px;
+  margin:10px 0 14px;
+  flex-wrap:wrap;
+  align-items:center;
+}
 
-/* labels de “tarjeta” (si las usás en algún bloque) */
+.subtab-btn{
+  border:1px solid #d0d7de;
+  background:#fff;
+  padding:8px 12px;
+  border-radius:999px;
+  cursor:pointer;
+  font-weight:700;
+}
+
+.subtab-btn.is-active{
+  border-color:#111827;
+  box-shadow: 0 1px 8px rgba(0,0,0,.08);
+}
+
+.subtab-btn:disabled{
+  opacity:.45;
+  cursor:not-allowed;
+}
+
+/* ===================== PANELES PATRULLAS (LA CLAVE) ===================== */
+/* Por defecto, oculto todo */
+.patrulla-panel{
+  display:none;
+}
+
+/* Solo el activo se ve */
+.patrulla-panel.is-active{
+  display:block;
+}
+
+/* BLINDAJE: si algo mete style="display:block" o una regla global, acá manda igual */
+#tab-guardia .patrulla-panel{
+  display:none !important;
+}
+#tab-guardia .patrulla-panel.is-active{
+  display:block !important;
+}
+
+/* ===================== "TARJETA" LABEL/VALUE (si las usás) ===================== */
 .label{
   font-size:12px;
   color:#6b7280;
@@ -130,6 +174,7 @@
   font-weight:700;
 }
 
+/* ===================== JSON PREVIEW ===================== */
 .json-preview{
   background:#0b1020;
   color:#e5e7eb;
@@ -138,12 +183,3 @@
   overflow:auto;
   min-height:80px;
 }
-/* BLINDAJE subsolapas patrullas (gana incluso contra style="display:block") */
-#tab-guardia .patrulla-panel { display: none !important; }
-#tab-guardia .patrulla-panel.is-active { display: block !important; }
-
-/* y como tu .guardia-box está en flex, para formularios conviene columna */
-#tab-guardia .guardia-box.patrulla-panel{
-  display: block;           /* o flex con columna */
-}
-
