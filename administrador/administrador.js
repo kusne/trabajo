@@ -151,7 +151,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const loginError = document.getElementById("loginError");
 
   // ======================================================
-  // SUBSOLAPAS GUARDIA: Patrulla 1 / Patrulla 2 (ROBUSTO)
+  // SUBSOLAPAS GUARDIA: Patrulla 1 / Patrulla 2 (REPARADO)
   // ======================================================
   const SubtabsPatrullas = (() => {
     let bound = false;
@@ -161,17 +161,37 @@ document.addEventListener("DOMContentLoaded", async () => {
     let panelP1 = null;
     let panelP2 = null;
 
+    function scope() {
+      return document.getElementById("tab-guardia") || document;
+    }
+
     function refreshRefs() {
-      btns = Array.from(document.querySelectorAll('.subtab-btn[data-subtab]'));
+      const sc = scope();
+      btns = Array.from(sc.querySelectorAll('.subtab-btn[data-subtab]'));
       panelP1 = document.getElementById("patrulla-p1");
       panelP2 = document.getElementById("patrulla-p2");
     }
 
+    function sanitizeButtons() {
+      // Asegura que P1 y P2 no estén disabled por accidente.
+      btns.forEach((b) => {
+        const k = b.getAttribute("data-subtab");
+        if (k === "p1" || k === "p2") {
+          b.disabled = false;
+          b.removeAttribute("disabled");
+          b.style.pointerEvents = "auto";
+        }
+        // p3 queda como venga desde HTML (generalmente disabled)
+      });
+    }
+
     function forceDisplay(el, show) {
       if (!el) return;
-      el.classList.toggle("is-active", !!show);
 
-      // CLAVE: pisar incluso CSS con !important
+      el.classList.toggle("is-active", !!show);
+      el.setAttribute("aria-hidden", show ? "false" : "true");
+
+      // CLAVE: pisar inline/CSS con !important
       el.style.setProperty("display", show ? "block" : "none", "important");
     }
 
@@ -180,7 +200,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       active = k;
 
       btns.forEach((b) => {
-        b.classList.toggle("is-active", b.getAttribute("data-subtab") === k);
+        const isOn = b.getAttribute("data-subtab") === k;
+        b.classList.toggle("is-active", isOn);
+        b.setAttribute("aria-selected", isOn ? "true" : "false");
       });
 
       forceDisplay(panelP1, k === "p1");
@@ -194,12 +216,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     function ensureBound() {
       refreshRefs();
 
-      // si el HTML no tiene subsolapas, no hacemos nada
       if (!btns.length || (!panelP1 && !panelP2)) return;
+
+      sanitizeButtons();
 
       if (!bound) {
         btns.forEach((b) => {
-          b.addEventListener("click", () => setActive(b.getAttribute("data-subtab"), { save: true }));
+          b.addEventListener("click", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const k = b.getAttribute("data-subtab");
+            setActive(k, { save: true });
+
+            // re-aplica 1 frame después para evitar “ambos visibles”
+            requestAnimationFrame(() => setActive(k, { save: false }));
+          }, { passive: false });
         });
         bound = true;
       }
@@ -208,13 +239,17 @@ document.addEventListener("DOMContentLoaded", async () => {
       let last = "p1";
       try { last = localStorage.getItem("adm_patrulla_activa") || "p1"; } catch { }
       setActive(last, { save: false });
+
+      // blindaje extra
+      requestAnimationFrame(() => setActive(last, { save: false }));
     }
 
     function apply() {
-      // aplica el estado actual sin rebindeo
       refreshRefs();
       if (!btns.length || (!panelP1 && !panelP2)) return;
+      sanitizeButtons();
       setActive(active, { save: false });
+      requestAnimationFrame(() => setActive(active, { save: false }));
     }
 
     function getActive() { return active; }
@@ -234,10 +269,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     tabBtns.forEach((b) => b.classList.toggle("is-active", b.dataset.tab === nombre));
     Object.keys(tabPanels).forEach((k) => tabPanels[k]?.classList.toggle("is-active", k === nombre));
 
-    // cuando entro a Guardia, aplico sí o sí subsolapas
+    // cuando entro a Guardia, aplico sí o sí subsolapas (y re-aplico 1 frame después)
     if (nombre === "guardia") {
       SubtabsPatrullas.ensureBound();
       SubtabsPatrullas.apply();
+      requestAnimationFrame(() => SubtabsPatrullas.apply());
     }
   }
 
@@ -1033,7 +1069,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     aplicarStateAGuardiaUI();
 
-    // Re-aplicar subsolapa activa (sin rebindeo)
+    // Re-aplicar subsolapa activa
     SubtabsPatrullas.apply();
   }
 
@@ -1156,7 +1192,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     renderGuardiaPreview();
 
-    // mantener panel correcto
     SubtabsPatrullas.apply();
   }
 
@@ -1299,7 +1334,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     cargarLugaresParaGuardia();
     await cargarGuardiaDesdeServidor();
 
-    // si estás en guardia, re-aplicá subsolapas
     SubtabsPatrullas.apply();
   }
 
