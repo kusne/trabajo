@@ -138,3 +138,12 @@
   overflow:auto;
   min-height:80px;
 }
+/* BLINDAJE subsolapas patrullas (gana incluso contra style="display:block") */
+#tab-guardia .patrulla-panel { display: none !important; }
+#tab-guardia .patrulla-panel.is-active { display: block !important; }
+
+/* y como tu .guardia-box está en flex, para formularios conviene columna */
+#tab-guardia .guardia-box.patrulla-panel{
+  display: block;           /* o flex con columna */
+}
+
