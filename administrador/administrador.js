@@ -45,26 +45,6 @@ function normalizarLugar(l) {
   return String(l || "").trim().replace(/\s+/g, " ");
 }
 
-function hhmmNow() {
-  const d = new Date();
-  const hh = String(d.getHours()).padStart(2, "0");
-  const mm = String(d.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
-}
-
-function ymdToday() {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function makeId() {
-  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
-  return `id_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-}
-
 function esc(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({
     "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
@@ -85,6 +65,18 @@ function slugifyValue(s) {
     .replace(/^_+|_+$/g, "");
 }
 
+// Hora local AR (UTC-3) como HH:MM
+function hhmmArNow() {
+  const d = new Date();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+function isoNow() {
+  return new Date().toISOString();
+}
+
 async function getSessionOrNull() {
   const { data: { session }, error } = await supabaseClient.auth.getSession();
   if (error || !session?.access_token) return null;
@@ -94,7 +86,7 @@ async function getSessionOrNull() {
 // PATCH id=1; si no existe, intentamos INSERT id=1
 async function patchOrInsertStore({ table, payload, session }) {
   const urlPatch = `${SUPABASE_URL}/rest/v1/${table}?id=eq.1`;
-  const body = JSON.stringify({ payload, updated_at: new Date().toISOString() });
+  const body = JSON.stringify({ payload, updated_at: isoNow() });
 
   const doPatch = async () => fetch(urlPatch, {
     method: "PATCH",
@@ -110,11 +102,14 @@ async function patchOrInsertStore({ table, payload, session }) {
 
   let resp = await doPatch();
 
-  // Si no existe fila id=1 (404 / 406 según config), intentamos INSERT
   if (!resp.ok) {
     const txt = await resp.text();
-    // Heurística: si fue “no rows” / 404-like, probamos insert
-    const maybeMissingRow = resp.status === 404 || resp.status === 406 || /0 rows/i.test(txt) || /not found/i.test(txt);
+    const maybeMissingRow =
+      resp.status === 404 ||
+      resp.status === 406 ||
+      /0 rows/i.test(txt) ||
+      /not found/i.test(txt);
+
     if (maybeMissingRow) {
       const urlInsert = `${SUPABASE_URL}/rest/v1/${table}`;
       resp = await fetch(urlInsert, {
@@ -126,10 +121,9 @@ async function patchOrInsertStore({ table, payload, session }) {
           apikey: SUPABASE_ANON_KEY,
           Authorization: "Bearer " + session.access_token,
         },
-        body: JSON.stringify([{ id: 1, payload, updated_at: new Date().toISOString() }]),
+        body: JSON.stringify([{ id: 1, payload, updated_at: isoNow() }]),
       });
     } else {
-      // si no es missing row, devolvemos el error original
       return { ok: false, status: resp.status, text: txt };
     }
   }
@@ -161,6 +155,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const tabPanels = {
     ordenes: document.getElementById("tab-ordenes"),
     guardia: document.getElementById("tab-guardia"),
+    inventario: document.getElementById("tab-inventario"),
   };
 
   function activarTab(nombre) {
@@ -180,35 +175,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   const selectOrdenExistente = document.getElementById("ordenExistente");
   const btnPublicar = document.getElementById("btnPublicarOrdenes");
 
-  // ===== INVENTARIO UI =====
-  const invTipo = document.getElementById("invTipo");
-  const invLabel = document.getElementById("invLabel");
-  const invValue = document.getElementById("invValue");
-  const invOrden = document.getElementById("invOrden");
-  const btnInvAgregar = document.getElementById("btnInvAgregar");
-  const btnInvRefrescar = document.getElementById("btnInvRefrescar");
-  const invLista = document.getElementById("invLista");
-  const invEstado = document.getElementById("invEstado");
-
-  // ===== RETIROS UI =====
-  const elBaseEstado = document.getElementById("baseEstado");
-  const preBase = document.getElementById("baseJsonPreview");
-
-  const selBaseLugar = document.getElementById("baseLugar");
-  const inpHoraRetiro = document.getElementById("baseHoraRetiro");
-  const inpHoraInicioPrev = document.getElementById("baseHoraInicioPrev");
-  const inpMision = document.getElementById("baseMision");
-  const inpObs = document.getElementById("baseObs");
-
-  const boxPersonal = document.getElementById("basePersonalList");
-  const boxMovil = document.getElementById("baseMovilList");
-  const boxElementos = document.getElementById("baseElementosList");
-
-  const btnRegistrarRetiro = document.getElementById("btnRegistrarRetiro");
-  const btnCerrarRetiro = document.getElementById("btnCerrarRetiro");
-  const btnRefrescarRetiros = document.getElementById("btnRefrescarRetiros");
-  const contRetirosAbiertos = document.getElementById("retirosAbiertosList");
-
   // ===== LOGOUT =====
   const btnLogout = document.getElementById("btnLogout");
   if (btnLogout) {
@@ -220,7 +186,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // ======================================================
-  // ESTADO DE CAMBIOS / PUBLICACIÓN (ÓRDENES)
+  // ÓRDENES (sin tocar lógica actual)
   // ======================================================
   let cambiosId = 0;
   let ultimoPublicadoId = 0;
@@ -242,9 +208,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     btnPublicar.classList.toggle("disabled", !habilitado);
   }
 
-  // ======================================================
-  // PARSE FRANJAS (HORARIO - LUGAR - TÍTULO)
-  // ======================================================
   function parseFranjas(raw) {
     const lines = String(raw || "")
       .split("\n")
@@ -263,9 +226,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     return out.length ? { ok: true, franjas: out } : { ok: false, error: "Franjas vacías" };
   }
 
-  // ======================================================
-  // SELECTOR ÓRDENES
-  // ======================================================
   function actualizarSelector() {
     if (!selectOrdenExistente) return;
 
@@ -313,9 +273,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     StorageApp.guardarOrdenes(filtradas);
   }
 
-  // ======================================================
-  // AGREGAR / ACTUALIZAR ORDEN
-  // ======================================================
   function agregarOrden() {
     if (typeof StorageApp === "undefined" || !StorageApp.cargarOrdenes || !StorageApp.guardarOrdenes) {
       alert("Error: StorageApp no está disponible.");
@@ -351,17 +308,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     limpiarCampos();
     marcarCambio();
 
-    // refresca lugares base
-    cargarLugaresBase();
+    // lugares para Guardia
+    cargarLugaresParaGuardia();
 
     alert("Orden guardada.");
   }
 
   window.__adm_agregarOrden = agregarOrden;
 
-  // ======================================================
-  // FINALIZAR / CADUCIDAD
-  // ======================================================
   if (typeof CaducidadFinalizar !== "undefined" && typeof CaducidadFinalizar.bindAFinalizar === "function") {
     CaducidadFinalizar.bindAFinalizar({
       checkboxEl: chkFinalizar,
@@ -369,9 +323,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // ======================================================
-  // SELECT ORDEN EXISTENTE
-  // ======================================================
   if (selectOrdenExistente) {
     selectOrdenExistente.addEventListener("change", () => {
       const v = selectOrdenExistente.value;
@@ -382,7 +333,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
       const idx = Number(v);
       if (isNaN(idx)) return;
-
       if (typeof StorageApp === "undefined" || !StorageApp.cargarOrdenes) return;
 
       const ordenes = StorageApp.cargarOrdenes();
@@ -400,14 +350,10 @@ document.addEventListener("DOMContentLoaded", async () => {
         franjasEl.value = (o.franjas || []).map((f) => `${f.horario} - ${f.lugar} - ${f.titulo}`).join("\n");
       }
 
-      // refresca lugares base (por si cambió alguna franja/lugar)
-      cargarLugaresBase();
+      cargarLugaresParaGuardia();
     });
   }
 
-  // ======================================================
-  // ELIMINAR ORDEN
-  // ======================================================
   function eliminarOrden() {
     if (ordenSeleccionadaIdx === null || ordenSeleccionadaIdx === undefined) {
       alert("Primero seleccioná una orden para eliminar.");
@@ -441,15 +387,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     actualizarSelector();
     marcarCambio();
 
-    cargarLugaresBase();
+    cargarLugaresParaGuardia();
     alert("Orden eliminada.");
   }
 
   window.eliminarOrden = eliminarOrden;
 
-  // ======================================================
-  // PUBLICAR ÓRDENES
-  // ======================================================
   async function publicarOrdenes() {
     if (!puedePublicar()) {
       alert("Primero cargue una orden");
@@ -479,7 +422,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         apikey: SUPABASE_ANON_KEY,
         Authorization: "Bearer " + session.access_token,
       },
-      body: JSON.stringify({ payload: payloadPublicar, updated_at: new Date().toISOString() }),
+      body: JSON.stringify({ payload: payloadPublicar, updated_at: isoNow() }),
     });
 
     if (!resp.ok) {
@@ -497,13 +440,30 @@ document.addEventListener("DOMContentLoaded", async () => {
   window.__adm_publicarOrdenes = publicarOrdenes;
 
   // ======================================================
-  // INVENTARIO (Supabase: inventario_base)
+  // INVENTARIO (inventario_base) - tab Inventario
   // ======================================================
-  let inventario = [];
+  const invTipo = document.getElementById("invTipo");
+  const invLabel = document.getElementById("invLabel");
+  const invValue = document.getElementById("invValue");
+  const invOrden = document.getElementById("invOrden");
+  const invSubgrupo = document.getElementById("invSubgrupo");
+  const invMetaExtra = document.getElementById("invMetaExtra");
+  const btnInvAgregar = document.getElementById("btnInvAgregar");
+  const btnInvRefrescar = document.getElementById("btnInvRefrescar");
+  const invLista = document.getElementById("invLista");
+  const invEstado = document.getElementById("invEstado");
+
+  let inventario = []; // [{id,tipo,label,value,orden,activo,meta}]
 
   function invActivos(tipo) {
     return inventario
       .filter((x) => x.tipo === tipo && x.activo)
+      .sort((a, b) => (a.orden - b.orden) || a.label.localeCompare(b.label, "es"));
+  }
+
+  function invByTipo(tipo) {
+    return inventario
+      .filter((x) => x.tipo === tipo)
       .sort((a, b) => (a.orden - b.orden) || a.label.localeCompare(b.label, "es"));
   }
 
@@ -512,12 +472,18 @@ document.addEventListener("DOMContentLoaded", async () => {
     return r ? r.label : value;
   }
 
+  function safeParseJson(input) {
+    const s = String(input || "").trim();
+    if (!s) return null;
+    try { return JSON.parse(s); } catch { return "__INVALID__"; }
+  }
+
   async function invLoad() {
     if (invEstado) invEstado.textContent = "Cargando inventario…";
 
     const { data, error } = await supabaseClient
       .from("inventario_base")
-      .select("id,tipo,label,value,orden,activo")
+      .select("id,tipo,label,value,orden,activo,meta")
       .order("tipo", { ascending: true })
       .order("orden", { ascending: true })
       .order("label", { ascending: true });
@@ -527,14 +493,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (invEstado) invEstado.textContent = "Error cargando inventario (mirá Console).";
       inventario = [];
       renderInventarioLista();
-      renderChipsDesdeInventario();
+      renderGuardiaDesdeInventario();
       return false;
     }
 
     inventario = Array.isArray(data) ? data : [];
     if (invEstado) invEstado.textContent = `Inventario: ${inventario.length} ítems`;
     renderInventarioLista();
-    renderChipsDesdeInventario();
+    renderGuardiaDesdeInventario();
     return true;
   }
 
@@ -547,15 +513,28 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!label) return alert("Label: obligatorio.");
     if (!value) value = slugifyValue(label);
 
-    const { error } = await supabaseClient
-      .from("inventario_base")
-      .insert([{
-        tipo,
-        label,
-        value,
-        orden: isNaN(orden) ? 0 : orden,
-        activo: true,
-      }]);
+    // meta armado según tipo
+    const meta = {};
+
+    if (tipo === "elemento") {
+      const sg = (invSubgrupo?.value || "").trim();
+      if (sg) meta.subgrupo = sg;
+    }
+
+    const extra = safeParseJson(invMetaExtra?.value || "");
+    if (extra === "__INVALID__") return alert("Meta extra inválido (JSON).");
+    if (extra && typeof extra === "object" && !Array.isArray(extra)) Object.assign(meta, extra);
+
+    const payload = {
+      tipo,
+      label,
+      value,
+      orden: isNaN(orden) ? 0 : orden,
+      activo: true,
+      meta: Object.keys(meta).length ? meta : null,
+    };
+
+    const { error } = await supabaseClient.from("inventario_base").insert([payload]);
 
     if (error) {
       console.error("[ADM] inventario_base insert error:", error);
@@ -566,6 +545,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (invLabel) invLabel.value = "";
     if (invValue) invValue.value = "";
     if (invOrden) invOrden.value = "0";
+    if (invSubgrupo) invSubgrupo.value = "";
+    if (invMetaExtra) invMetaExtra.value = "";
 
     await invLoad();
   }
@@ -597,9 +578,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     const nOrden = Number(nOrdenStr);
     if (isNaN(nOrden)) return alert("Orden inválido.");
 
+    const nMetaStr = prompt("Editar meta (JSON) — vacío para null:", item.meta ? JSON.stringify(item.meta) : "");
+    if (nMetaStr === null) return;
+    const parsed = safeParseJson(nMetaStr);
+    if (parsed === "__INVALID__") return alert("Meta inválido (JSON).");
+
     const { error } = await supabaseClient
       .from("inventario_base")
-      .update({ label: nLabel.trim(), value: nValue.trim(), orden: nOrden })
+      .update({ label: nLabel.trim(), value: nValue.trim(), orden: nOrden, meta: parsed || null })
       .eq("id", item.id);
 
     if (error) {
@@ -623,18 +609,20 @@ document.addEventListener("DOMContentLoaded", async () => {
       );
 
     if (!rows.length) {
-      invLista.innerHTML = `<div class="muted">Sin ítems. Agregá personal/móviles/elementos arriba.</div>`;
+      invLista.innerHTML = `<div class="muted">Sin ítems.</div>`;
       return;
     }
 
     invLista.innerHTML = rows.map((it) => {
       const badge = it.activo ? "ACTIVO" : "INACTIVO";
+      const metaTxt = it.meta ? esc(JSON.stringify(it.meta)) : "—";
       return `
         <div style="border:1px solid #ddd; border-radius:10px; padding:10px; margin:8px 0; background:#fff;">
           <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
             <div>
               <div style="font-weight:700;">${esc(it.tipo)} — ${esc(it.label)} <span class="muted">(${esc(it.value)})</span></div>
               <div class="muted">Orden: ${esc(it.orden)} — Estado: ${badge}</div>
+              <div class="muted">Meta: ${metaTxt}</div>
             </div>
             <div style="display:flex; gap:8px;">
               <button type="button" class="btn-ghost" data-inv-edit="${esc(it.id)}">Editar</button>
@@ -676,10 +664,38 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // ======================================================
-  // BASE / RETIROS (guardia_store.payload)
+  // GUARDIA (guardia_estado.id=1)
   // ======================================================
-  let baseStore = { version: 1, retiros: [] };
-  let retiroSeleccionadoId = null;
+  const guardiaEstadoTxt = document.getElementById("guardiaEstadoTxt");
+  const btnGuardiaGuardar = document.getElementById("btnGuardiaGuardar");
+  const btnGuardiaActualizar = document.getElementById("btnGuardiaActualizar");
+  const preGuardia = document.getElementById("guardiaJsonPreview");
+
+  const p1Lugar = document.getElementById("p1Lugar");
+  const p1Obs = document.getElementById("p1Obs");
+  const p1Personal = document.getElementById("p1Personal");
+  const p1Moviles = document.getElementById("p1Moviles");
+  const p1Elementos = document.getElementById("p1Elementos");
+  const p1Cartuchos = document.getElementById("p1Cartuchos");
+
+  const p2Lugar = document.getElementById("p2Lugar");
+  const p2Obs = document.getElementById("p2Obs");
+  const p2Personal = document.getElementById("p2Personal");
+  const p2Moviles = document.getElementById("p2Moviles");
+  const p2Elementos = document.getElementById("p2Elementos");
+  const p2Cartuchos = document.getElementById("p2Cartuchos");
+
+  const SUBGRUPOS_ORDEN = ["Alometros", "Alcoholimetros", "Pda", "Impresoras", "Ht", "Escopetas", "Cartuchos"];
+
+  let guardiaState = {
+    version: 1,
+    patrullas: {
+      p1: { lugar: "", obs: "", estado: "", estado_ts: "", personal_ids: [], moviles: [], elementos_ids: [], cartuchos: { at: 0, pg: 0 } },
+      p2: { lugar: "", obs: "", estado: "", estado_ts: "", personal_ids: [], moviles: [], elementos_ids: [], cartuchos: { at: 0, pg: 0 } },
+    },
+    log: [],
+    updated_at_ts: "",
+  };
 
   function lugaresDesdeOrdenes() {
     if (typeof StorageApp === "undefined" || !StorageApp.cargarOrdenes) return [];
@@ -696,40 +712,34 @@ document.addEventListener("DOMContentLoaded", async () => {
     return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
   }
 
-  function cargarLugaresBase() {
-    if (!selBaseLugar) return;
+  function fillLugarSelect(selectEl) {
+    if (!selectEl) return;
     const lugares = lugaresDesdeOrdenes();
-
-    const actual = selBaseLugar.value || "";
-    selBaseLugar.innerHTML = `<option value="">Seleccionar lugar</option>`;
+    const actual = selectEl.value || "";
+    selectEl.innerHTML = `<option value="">Seleccionar lugar</option>`;
     lugares.forEach((l) => {
       const opt = document.createElement("option");
       opt.value = l;
       opt.textContent = l;
-      selBaseLugar.appendChild(opt);
+      selectEl.appendChild(opt);
     });
-
-    if (actual && lugares.includes(actual)) selBaseLugar.value = actual;
+    if (actual && lugares.includes(actual)) selectEl.value = actual;
   }
 
-  function renderChips(container, items, { type, name, prefixId }) {
-    if (!container) return;
+  function cargarLugaresParaGuardia() {
+    fillLugarSelect(p1Lugar);
+    fillLugarSelect(p2Lugar);
+  }
 
+  function chipsCheckbox(container, items, { prefix }) {
+    if (!container) return;
     if (!items.length) {
-      container.innerHTML = `<div class="muted">No hay ítems activos en inventario para este bloque.</div>`;
+      container.innerHTML = `<div class="muted">Sin datos.</div>`;
       return;
     }
 
     container.innerHTML = items.map((it, idx) => {
-      const id = `${prefixId}_${idx}`;
-      if (type === "radio") {
-        return `
-          <label class="checkbox-container" style="display:flex; align-items:center; gap:8px; border:1px solid #ddd; padding:6px 10px; border-radius:999px;">
-            <input type="radio" name="${esc(name)}" id="${esc(id)}" value="${esc(it.value)}">
-            <span>${esc(it.label)}</span>
-          </label>
-        `;
-      }
+      const id = `${prefix}_${idx}`;
       return `
         <label class="checkbox-container" style="display:flex; align-items:center; gap:8px; border:1px solid #ddd; padding:6px 10px; border-radius:999px;">
           <input type="checkbox" id="${esc(id)}" value="${esc(it.value)}">
@@ -739,237 +749,490 @@ document.addEventListener("DOMContentLoaded", async () => {
     }).join("");
   }
 
-  function renderChipsDesdeInventario() {
-    renderChips(boxPersonal, invActivos("personal"), { type: "checkbox", prefixId: "per", name: "" });
-    renderChips(boxMovil, invActivos("movil"), { type: "radio", name: "baseMovilRadio", prefixId: "mov" });
-    renderChips(boxElementos, invActivos("elemento"), { type: "checkbox", prefixId: "elm", name: "" });
-  }
-
-  function leerSeleccionCheckbox(container) {
-    if (!container) return [];
-    const inputs = Array.from(container.querySelectorAll('input[type="checkbox"]'));
-    return inputs.filter((i) => i.checked).map((i) => i.value);
-  }
-
-  function leerSeleccionRadio(container, name) {
-    if (!container) return "";
-    const el = container.querySelector(`input[type="radio"][name="${CSS.escape(name)}"]:checked`);
-    return el ? el.value : "";
-  }
-
-  function renderBasePreview() {
-    if (preBase) preBase.textContent = JSON.stringify(baseStore || {}, null, 2);
-
-    const abiertos = (baseStore?.retiros || []).filter((r) => r?.estado === "ABIERTO");
-    if (elBaseEstado) elBaseEstado.textContent = `Retiros abiertos: ${abiertos.length}`;
-
-    if (contRetirosAbiertos) {
-      if (!abiertos.length) {
-        contRetirosAbiertos.innerHTML = `<div class="muted">No hay retiros abiertos.</div>`;
-      } else {
-        contRetirosAbiertos.innerHTML = abiertos.map((r) => {
-          const isSel = retiroSeleccionadoId === r.id;
-          const personalTxt = Array.isArray(r.personal) ? r.personal.join(", ") : String(r.personal || "");
-          const elemsTxt = Array.isArray(r.elementos) ? r.elementos.join(", ") : String(r.elementos || "");
-          return `
-            <div data-retiro-id="${esc(r.id)}"
-                 style="border:1px solid #ddd; border-radius:10px; padding:10px; margin:8px 0; cursor:pointer; background:${isSel ? "#f0f7ff" : "#fff"}">
-              <div style="font-weight:700;">${esc(r.movil_label || r.movil_id || "SIN MÓVIL")} — ${esc(r.lugar || "SIN LUGAR")}</div>
-              <div class="muted">Retiro: ${esc(r.hora_retiro || "")} — Fecha: ${esc(r.fecha || "")}</div>
-              <div style="margin-top:6px;"><b>Personal:</b> ${esc(personalTxt || "-")}</div>
-              <div><b>Elementos:</b> ${esc(elemsTxt || "-")}</div>
-              <div class="muted" style="margin-top:6px;">(Click para seleccionar y poder cerrar)</div>
-            </div>
-          `;
-        }).join("");
-
-        contRetirosAbiertos.querySelectorAll("[data-retiro-id]").forEach((el) => {
-          el.addEventListener("click", () => {
-            retiroSeleccionadoId = el.getAttribute("data-retiro-id");
-            renderBasePreview();
-          });
-        });
-      }
-    }
-
-    if (btnCerrarRetiro) btnCerrarRetiro.disabled = !retiroSeleccionadoId;
-  }
-
-  async function cargarBaseDesdeServidor() {
-    const session = await getSessionOrNull();
-    if (!session) {
-      baseStore = { version: 1, retiros: [] };
-      renderBasePreview();
+  function renderMoviles(container, moviles, { prefix }) {
+    if (!container) return;
+    if (!moviles.length) {
+      container.innerHTML = `<div class="muted">Sin móviles activos.</div>`;
       return;
     }
 
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/guardia_store?select=payload&id=eq.1&limit=1`, {
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Accept: "application/json",
-        Authorization: "Bearer " + session.access_token,
-      },
+    // Cada móvil: checkbox "usar" + libro/llave/tvf
+    container.innerHTML = moviles.map((m, idx) => {
+      const baseId = `${prefix}_mov_${idx}`;
+      return `
+        <div style="display:flex; align-items:center; gap:10px; border:1px solid #ddd; border-radius:12px; padding:8px 10px; margin:6px 0; background:#fff;">
+          <label style="display:flex; align-items:center; gap:8px; min-width:180px;">
+            <input type="checkbox" data-movil-pick="1" data-movil-id="${esc(m.value)}" id="${esc(baseId)}">
+            <span style="font-weight:700;">${esc(m.label)}</span>
+          </label>
+
+          <label class="muted" style="display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" data-movil-flag="libro" data-movil-id="${esc(m.value)}" disabled>
+            libro
+          </label>
+
+          <label class="muted" style="display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" data-movil-flag="llave" data-movil-id="${esc(m.value)}" disabled>
+            llave
+          </label>
+
+          <label class="muted" style="display:flex; align-items:center; gap:6px;">
+            <input type="checkbox" data-movil-flag="tvf" data-movil-id="${esc(m.value)}" disabled>
+            tvf
+          </label>
+        </div>
+      `;
+    }).join("");
+
+    // habilita flags si el móvil está seleccionado
+    container.querySelectorAll('input[data-movil-pick="1"]').forEach((chk) => {
+      chk.addEventListener("change", () => {
+        const movilId = chk.getAttribute("data-movil-id");
+        const enabled = chk.checked;
+        const flags = container.querySelectorAll(`input[data-movil-flag][data-movil-id="${CSS.escape(movilId)}"]`);
+        flags.forEach((f) => {
+          f.disabled = !enabled;
+          if (!enabled) f.checked = false;
+        });
+      });
     });
+  }
+
+  function groupElementos(elementosActivos) {
+    const groups = new Map(); // subgrupo -> items
+    (elementosActivos || []).forEach((e) => {
+      const sg = String(e?.meta?.subgrupo || "SinSubgrupo").trim() || "SinSubgrupo";
+      if (!groups.has(sg)) groups.set(sg, []);
+      groups.get(sg).push(e);
+    });
+
+    // orden fijo + el resto al final
+    const ordered = [];
+    SUBGRUPOS_ORDEN.forEach((sg) => {
+      if (groups.has(sg)) ordered.push([sg, groups.get(sg)]);
+    });
+    Array.from(groups.keys())
+      .filter((k) => !SUBGRUPOS_ORDEN.includes(k))
+      .sort((a,b)=>a.localeCompare(b,"es"))
+      .forEach((k) => ordered.push([k, groups.get(k)]));
+
+    return ordered;
+  }
+
+  function renderElementos(container, elementosActivos, { prefix }) {
+    if (!container) return;
+    if (!elementosActivos.length) {
+      container.innerHTML = `<div class="muted">Sin elementos activos.</div>`;
+      return;
+    }
+
+    const grouped = groupElementos(elementosActivos);
+
+    container.innerHTML = grouped.map(([sg, items]) => {
+      const listId = `${prefix}_sg_${slugifyValue(sg)}`;
+      return `
+        <div style="border:1px solid #e5e5e5; border-radius:14px; padding:10px; margin:10px 0; background:#fff;">
+          <div style="font-weight:800; margin-bottom:8px;">${esc(sg)}</div>
+          <div id="${esc(listId)}" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
+        </div>
+      `;
+    }).join("");
+
+    grouped.forEach(([sg, items]) => {
+      const listId = `${prefix}_sg_${slugifyValue(sg)}`;
+      const holder = container.querySelector(`#${CSS.escape(listId)}`);
+      if (!holder) return;
+      chipsCheckbox(holder, items, { prefix: `${listId}_it` });
+    });
+  }
+
+  function renderCartuchos(container, cartuchosItems, { prefix }) {
+    if (!container) return;
+    if (!cartuchosItems.length) {
+      container.innerHTML = `<div class="muted">Sin cartuchos en inventario.</div>`;
+      return;
+    }
+
+    // Cartuchos: checkbox + cantidad (disabled si no check)
+    container.innerHTML = cartuchosItems.map((c, idx) => {
+      const id = `${prefix}_car_${idx}`;
+      const tipo = String(c?.meta?.cartucho_tipo || "").toUpperCase(); // AT / PG si lo pusiste
+      return `
+        <div style="display:flex; align-items:center; gap:10px; border:1px solid #ddd; border-radius:12px; padding:8px 10px; margin:6px 0; background:#fff;">
+          <label style="display:flex; align-items:center; gap:8px; min-width:260px;">
+            <input type="checkbox" data-cartucho-pick="1" data-cartucho-id="${esc(c.value)}" id="${esc(id)}">
+            <span style="font-weight:700;">${esc(c.label)}</span>
+            <span class="muted">${tipo ? "(" + esc(tipo) + ")" : ""}</span>
+          </label>
+
+          <div style="width:140px;">
+            <input type="number" min="0" step="1" class="full"
+              data-cartucho-qty="1" data-cartucho-id="${esc(c.value)}" disabled
+              placeholder="cantidad">
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    container.querySelectorAll('input[data-cartucho-pick="1"]').forEach((chk) => {
+      chk.addEventListener("change", () => {
+        const id = chk.getAttribute("data-cartucho-id");
+        const qty = container.querySelector(`input[data-cartucho-qty="1"][data-cartucho-id="${CSS.escape(id)}"]`);
+        if (!qty) return;
+        qty.disabled = !chk.checked;
+        if (!chk.checked) qty.value = "";
+      });
+    });
+  }
+
+  function renderGuardiaDesdeInventario() {
+    const personal = invActivos("personal");
+    const moviles = invActivos("movil");
+    const elementos = invActivos("elemento");
+
+    // personal
+    chipsCheckbox(p1Personal, personal, { prefix: "p1_per" });
+    chipsCheckbox(p2Personal, personal, { prefix: "p2_per" });
+
+    // móviles + flags
+    renderMoviles(p1Moviles, moviles, { prefix: "p1" });
+    renderMoviles(p2Moviles, moviles, { prefix: "p2" });
+
+    // elementos por subgrupo (excepto Cartuchos, los manejamos aparte)
+    const elementosNoCart = elementos.filter((e) => String(e?.meta?.subgrupo || "").trim() !== "Cartuchos");
+    renderElementos(p1Elementos, elementosNoCart, { prefix: "p1_el" });
+    renderElementos(p2Elementos, elementosNoCart, { prefix: "p2_el" });
+
+    // cartuchos
+    const cartuchos = elementos.filter((e) => String(e?.meta?.subgrupo || "").trim() === "Cartuchos");
+    renderCartuchos(p1Cartuchos, cartuchos, { prefix: "p1" });
+    renderCartuchos(p2Cartuchos, cartuchos, { prefix: "p2" });
+
+    // aplicar defaults guardados (si ya cargamos guardiaState)
+    aplicarStateAGuardiaUI();
+  }
+
+  function readCheckedValues(container) {
+    if (!container) return [];
+    return Array.from(container.querySelectorAll('input[type="checkbox"]'))
+      .filter((x) => x.checked && x.value)
+      .map((x) => x.value);
+  }
+
+  function readMoviles(container) {
+    if (!container) return [];
+    if (!container) return [];
+
+    const picks = Array.from(container.querySelectorAll('input[data-movil-pick="1"]'));
+    const out = [];
+
+    picks.forEach((p) => {
+      if (!p.checked) return;
+      const movil_id = p.getAttribute("data-movil-id");
+
+      const libro = !!container.querySelector(`input[data-movil-flag="libro"][data-movil-id="${CSS.escape(movil_id)}"]`)?.checked;
+      const llave = !!container.querySelector(`input[data-movil-flag="llave"][data-movil-id="${CSS.escape(movil_id)}"]`)?.checked;
+      const tvf = !!container.querySelector(`input[data-movil-flag="tvf"][data-movil-id="${CSS.escape(movil_id)}"]`)?.checked;
+
+      out.push({ movil_id, libro, llave, tvf });
+    });
+
+    return out;
+  }
+
+  function readCartuchos(container) {
+    if (!container) return {};
+    const picks = Array.from(container.querySelectorAll('input[data-cartucho-pick="1"]'));
+    const out = {}; // value -> qty
+    picks.forEach((p) => {
+      if (!p.checked) return;
+      const id = p.getAttribute("data-cartucho-id");
+      const qtyEl = container.querySelector(`input[data-cartucho-qty="1"][data-cartucho-id="${CSS.escape(id)}"]`);
+      const qty = Number(qtyEl?.value || 0);
+      out[id] = isNaN(qty) ? 0 : qty;
+    });
+    return out;
+  }
+
+  function patrullaTieneEscopeta(elementos_ids) {
+    const escopetas = invActivos("elemento").filter((e) => String(e?.meta?.subgrupo || "").trim() === "Escopetas");
+    const escIds = new Set(escopetas.map((x) => x.value));
+    return (elementos_ids || []).some((id) => escIds.has(id));
+  }
+
+  function aplicarStateAGuardiaUI() {
+    // p1
+    if (p1Lugar) p1Lugar.value = guardiaState?.patrullas?.p1?.lugar || "";
+    if (p1Obs) p1Obs.value = guardiaState?.patrullas?.p1?.obs || "";
+
+    const p1 = guardiaState?.patrullas?.p1 || {};
+    const p2 = guardiaState?.patrullas?.p2 || {};
+
+    // personal
+    (p1Personal?.querySelectorAll('input[type="checkbox"]') || []).forEach((x) => {
+      x.checked = Array.isArray(p1.personal_ids) && p1.personal_ids.includes(x.value);
+    });
+    (p2Personal?.querySelectorAll('input[type="checkbox"]') || []).forEach((x) => {
+      x.checked = Array.isArray(p2.personal_ids) && p2.personal_ids.includes(x.value);
+    });
+
+    // móviles
+    function applyMov(container, movArr) {
+      if (!container) return;
+      const byId = new Map((movArr || []).map((m) => [String(m.movil_id), m]));
+      container.querySelectorAll('input[data-movil-pick="1"]').forEach((chk) => {
+        const id = chk.getAttribute("data-movil-id");
+        const m = byId.get(String(id));
+        chk.checked = !!m;
+
+        // disparar el handler para habilitar flags
+        chk.dispatchEvent(new Event("change"));
+
+        if (m) {
+          const libro = container.querySelector(`input[data-movil-flag="libro"][data-movil-id="${CSS.escape(id)}"]`);
+          const llave = container.querySelector(`input[data-movil-flag="llave"][data-movil-id="${CSS.escape(id)}"]`);
+          const tvf = container.querySelector(`input[data-movil-flag="tvf"][data-movil-id="${CSS.escape(id)}"]`);
+          if (libro) libro.checked = !!m.libro;
+          if (llave) llave.checked = !!m.llave;
+          if (tvf) tvf.checked = !!m.tvf;
+        }
+      });
+    }
+
+    applyMov(p1Moviles, p1.moviles);
+    applyMov(p2Moviles, p2.moviles);
+
+    // elementos (no cartuchos)
+    function applyElems(container, ids) {
+      if (!container) return;
+      container.querySelectorAll('input[type="checkbox"]').forEach((chk) => {
+        // OJO: dentro de elementos usamos value; dentro de chipsCheckbox se setea value del inventario
+        if (!chk.value) return;
+        chk.checked = Array.isArray(ids) && ids.includes(chk.value);
+      });
+    }
+
+    applyElems(p1Elementos, p1.elementos_ids);
+    applyElems(p2Elementos, p2.elementos_ids);
+
+    // cartuchos: check + qty
+    function applyCart(container, map) {
+      if (!container) return;
+      const m = map || {};
+      container.querySelectorAll('input[data-cartucho-pick="1"]').forEach((chk) => {
+        const id = chk.getAttribute("data-cartucho-id");
+        const qtyEl = container.querySelector(`input[data-cartucho-qty="1"][data-cartucho-id="${CSS.escape(id)}"]`);
+        const has = Object.prototype.hasOwnProperty.call(m, id);
+        chk.checked = has;
+        chk.dispatchEvent(new Event("change"));
+        if (qtyEl && has) qtyEl.value = String(m[id] ?? 0);
+      });
+    }
+
+    applyCart(p1Cartuchos, p1.cartuchos_map);
+    applyCart(p2Cartuchos, p2.cartuchos_map);
+
+    // regla: cartuchos solo si hay escopeta
+    aplicarReglaCartuchos(p1Elementos, p1Cartuchos, p1.elementos_ids);
+    aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2.elementos_ids);
+
+    renderGuardiaPreview();
+  }
+
+  function aplicarReglaCartuchos(elContainer, cartContainer, elementos_ids_override) {
+    if (!cartContainer) return;
+
+    const elementos_ids =
+      Array.isArray(elementos_ids_override)
+        ? elementos_ids_override
+        : readCheckedValues(elContainer);
+
+    const hayEscopeta = patrullaTieneEscopeta(elementos_ids);
+
+    // si no hay escopeta: deshabilitar y limpiar
+    cartContainer.querySelectorAll('input[data-cartucho-pick="1"]').forEach((chk) => {
+      chk.disabled = !hayEscopeta;
+      if (!hayEscopeta) chk.checked = false;
+    });
+    cartContainer.querySelectorAll('input[data-cartucho-qty="1"]').forEach((inp) => {
+      inp.disabled = true;
+      if (!hayEscopeta) inp.value = "";
+    });
+
+    // si hay escopeta, permitir (pero solo habilita qty cuando el checkbox está tildado)
+    if (hayEscopeta) {
+      cartContainer.querySelectorAll('input[data-cartucho-pick="1"]').forEach((chk) => {
+        chk.disabled = false;
+        chk.dispatchEvent(new Event("change"));
+      });
+    }
+  }
+
+  function renderGuardiaPreview() {
+    if (preGuardia) preGuardia.textContent = JSON.stringify(guardiaState || {}, null, 2);
+    if (guardiaEstadoTxt) guardiaEstadoTxt.textContent = `Última actualización: ${guardiaState.updated_at_ts || "—"}`;
+  }
+
+  function buildStateFromUI() {
+    const p1PersonalIds = readCheckedValues(p1Personal);
+    const p2PersonalIds = readCheckedValues(p2Personal);
+
+    const p1Mov = readMoviles(p1Moviles);
+    const p2Mov = readMoviles(p2Moviles);
+
+    const p1Elem = readCheckedValues(p1Elementos);
+    const p2Elem = readCheckedValues(p2Elementos);
+
+    // aplicar regla cartuchos según escopeta
+    aplicarReglaCartuchos(p1Elementos, p1Cartuchos, p1Elem);
+    aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2Elem);
+
+    const p1CartMap = readCartuchos(p1Cartuchos);
+    const p2CartMap = readCartuchos(p2Cartuchos);
+
+    const next = structuredClone(guardiaState || {});
+    next.version = 1;
+    next.updated_at_ts = isoNow();
+
+    next.patrullas = next.patrullas || {};
+    next.patrullas.p1 = next.patrullas.p1 || {};
+    next.patrullas.p2 = next.patrullas.p2 || {};
+
+    next.patrullas.p1.lugar = normalizarLugar(p1Lugar?.value || "");
+    next.patrullas.p1.obs = (p1Obs?.value || "").trim();
+    next.patrullas.p1.personal_ids = p1PersonalIds;
+    next.patrullas.p1.moviles = p1Mov;
+    next.patrullas.p1.elementos_ids = p1Elem;
+    next.patrullas.p1.cartuchos_map = p1CartMap;
+
+    next.patrullas.p2.lugar = normalizarLugar(p2Lugar?.value || "");
+    next.patrullas.p2.obs = (p2Obs?.value || "").trim();
+    next.patrullas.p2.personal_ids = p2PersonalIds;
+    next.patrullas.p2.moviles = p2Mov;
+    next.patrullas.p2.elementos_ids = p2Elem;
+    next.patrullas.p2.cartuchos_map = p2CartMap;
+
+    return next;
+  }
+
+  async function cargarGuardiaDesdeServidor() {
+    const session = await getSessionOrNull();
+    // lectura pública por RLS: podrías leer sin token, pero lo dejamos así
+    const headers = {
+      apikey: SUPABASE_ANON_KEY,
+      Accept: "application/json",
+    };
+    if (session?.access_token) headers.Authorization = "Bearer " + session.access_token;
+
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/guardia_estado?select=payload&id=eq.1&limit=1`, { headers });
 
     if (!r.ok) {
       const txt = await r.text();
-      console.warn("[ADM] No se pudo leer guardia_store:", r.status, txt);
-      baseStore = { version: 1, retiros: [] };
-      renderBasePreview();
+      console.warn("[ADM] No se pudo leer guardia_estado:", r.status, txt);
+      // no rompemos, dejamos el state local
+      renderGuardiaPreview();
       return;
     }
 
     const data = await r.json();
     const payload = data?.[0]?.payload || null;
 
-    if (payload && typeof payload === "object" && Array.isArray(payload.retiros)) baseStore = payload;
-    else baseStore = { version: 1, retiros: [] };
+    if (payload && typeof payload === "object") {
+      guardiaState = payload;
+      // normaliza campos mínimos
+      guardiaState.version = guardiaState.version || 1;
+      guardiaState.patrullas = guardiaState.patrullas || {
+        p1: { lugar: "", obs: "", estado: "", estado_ts: "", personal_ids: [], moviles: [], elementos_ids: [], cartuchos: {} },
+        p2: { lugar: "", obs: "", estado: "", estado_ts: "", personal_ids: [], moviles: [], elementos_ids: [], cartuchos: {} },
+      };
+      guardiaState.log = Array.isArray(guardiaState.log) ? guardiaState.log : [];
+      guardiaState.updated_at_ts = guardiaState.updated_at_ts || "";
+    }
 
-    const abiertos = baseStore.retiros.filter((x) => x?.estado === "ABIERTO");
-    if (retiroSeleccionadoId && !abiertos.some((x) => x.id === retiroSeleccionadoId)) retiroSeleccionadoId = null;
-
-    renderBasePreview();
+    aplicarStateAGuardiaUI();
   }
 
-  async function guardarBaseEnServidor(nextPayload) {
+  async function guardarGuardiaEnServidor(nextPayload) {
     const session = await getSessionOrNull();
     if (!session) {
-      alert("No hay sesión iniciada. Inicie sesión antes de usar Guardia.");
+      alert("No hay sesión iniciada. Inicie sesión antes de guardar Guardia.");
       return false;
     }
 
-    const res = await patchOrInsertStore({ table: "guardia_store", payload: nextPayload, session });
+    const res = await patchOrInsertStore({ table: "guardia_estado", payload: nextPayload, session });
     if (!res.ok) {
-      console.error("[ADM] Error guardando guardia_store:", res.status, res.text);
-      alert("Error guardando retiros. Mirá Console (F12). Status: " + res.status);
+      console.error("[ADM] Error guardando guardia_estado:", res.status, res.text);
+      alert("Error guardando Guardia. Mirá Console (F12). Status: " + res.status);
       return false;
     }
 
-    // Intento de leer payload devuelto
     const p = res.data?.[0]?.payload ?? res.data?.payload ?? null;
-    baseStore = p && typeof p === "object" ? p : nextPayload;
+    guardiaState = p && typeof p === "object" ? p : nextPayload;
 
-    renderBasePreview();
+    renderGuardiaPreview();
     return true;
   }
 
-  function limpiarSeleccionBase() {
-    retiroSeleccionadoId = null;
-
-    if (selBaseLugar) selBaseLugar.value = "";
-    if (inpHoraRetiro) inpHoraRetiro.value = hhmmNow();
-    if (inpHoraInicioPrev) inpHoraInicioPrev.value = "";
-    if (inpMision) inpMision.value = "";
-    if (inpObs) inpObs.value = "";
-
-    if (boxPersonal) Array.from(boxPersonal.querySelectorAll('input[type="checkbox"]')).forEach((x) => x.checked = false);
-    if (boxMovil) Array.from(boxMovil.querySelectorAll('input[type="radio"]')).forEach((x) => x.checked = false);
-    if (boxElementos) Array.from(boxElementos.querySelectorAll('input[type="checkbox"]')).forEach((x) => x.checked = false);
+  async function onGuardarGuardia() {
+    const next = buildStateFromUI();
+    const ok = await guardarGuardiaEnServidor(next);
+    if (ok) alert("Guardia guardada (defaults publicados).");
   }
 
-  async function onRegistrarRetiro() {
-    await cargarBaseDesdeServidor(); // evita carreras
+  async function onActualizarGuardia() {
+    // refresca inventario y state
+    await invLoad();
+    cargarLugaresParaGuardia();
+    await cargarGuardiaDesdeServidor();
+  }
 
-    const lugar = normalizarLugar(selBaseLugar?.value);
-    const hora_retiro = (inpHoraRetiro?.value || "").trim() || hhmmNow();
+  // Acciones de estado (Presente/Salen/Ingresan/Franco)
+  function bindAccionesEstado() {
+    document.querySelectorAll("[data-accion][data-p]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const accion = btn.getAttribute("data-accion");
+        const p = btn.getAttribute("data-p"); // p1 / p2
+        if (!accion || !p) return;
 
-    // ids desde inventario_base
-    const personal_ids = leerSeleccionCheckbox(boxPersonal);
-    const movil_id = leerSeleccionRadio(boxMovil, "baseMovilRadio");
-    const elementos_ids = leerSeleccionCheckbox(boxElementos);
+        // construir estado desde UI primero (para que log tenga el resumen actual)
+        const next = buildStateFromUI();
 
-    const hora_inicio_prevista = (inpHoraInicioPrev?.value || "").trim() || null;
-    const mision = (inpMision?.value || "").trim() || null;
-    const obs = (inpObs?.value || "").trim() || null;
+        const ts = isoNow();
+        const hora = hhmmArNow();
 
-    if (!lugar) return alert("Seleccioná un lugar.");
-    if (!personal_ids.length) return alert("Seleccioná al menos 1 personal.");
-    if (!movil_id) return alert("Seleccioná 1 móvil.");
+        next.patrullas[p] = next.patrullas[p] || {};
+        next.patrullas[p].estado = accion;
+        next.patrullas[p].estado_ts = ts;
 
-    // snapshots legibles (labels)
-    const personal = personal_ids.map((v) => invLabelFromValue("personal", v));
-    const elementos = elementos_ids.map((v) => invLabelFromValue("elemento", v));
-    const movil_label = invLabelFromValue("movil", movil_id);
+        // resumen mínimo (después lo refinamos para “Libro Memorandum”)
+        const pat = next.patrullas[p];
+        const perTxt = (pat.personal_ids || []).map((id) => invLabelFromValue("personal", id)).join(", ");
+        const movTxt = (pat.moviles || []).map((m) => invLabelFromValue("movil", m.movil_id)).join(", ");
+        const elemTxt = (pat.elementos_ids || []).map((id) => invLabelFromValue("elemento", id)).join(", ");
 
-    // regla: 1 retiro ABIERTO por móvil
-    const ya = (baseStore.retiros || []).find((r) => r?.estado === "ABIERTO" && String(r?.movil_id) === String(movil_id));
-    if (ya) {
-      const ok = confirm(`Ya existe un RETIRO ABIERTO para el móvil ${movil_label}.\n\n¿Querés CERRAR el anterior y abrir uno nuevo?`);
-      if (!ok) return;
+        const resumen = `Personal: ${perTxt || "-"} | Movil(es): ${movTxt || "-"} | Elementos: ${elemTxt || "-"}`;
 
-      ya.estado = "CERRADO";
-      ya.hora_regreso = hhmmNow();
-      ya.cierre_ts = new Date().toISOString();
-    }
+        next.log = Array.isArray(next.log) ? next.log : [];
+        next.log.unshift({ patrulla: p.toUpperCase(), accion, hora, ts, resumen });
 
-    const retiro = {
-      id: makeId(),
-      estado: "ABIERTO",
-      fecha: ymdToday(),
-      hora_retiro,
-      lugar,
+        await guardarGuardiaEnServidor(next);
+        aplicarStateAGuardiaUI();
+      });
+    });
+  }
 
-      // ids (para autocompletar WSP sin ambigüedad)
-      personal_ids,
-      movil_id,
-      elementos_ids,
+  if (btnGuardiaGuardar) btnGuardiaGuardar.addEventListener("click", () => onGuardarGuardia().catch(console.error));
+  if (btnGuardiaActualizar) btnGuardiaActualizar.addEventListener("click", () => onActualizarGuardia().catch(console.error));
 
-      // labels (para lectura humana)
-      personal,
-      movil_label,
-      elementos,
-
-      hora_inicio_prevista,
-      mision_prevista: mision,
-      observaciones: obs,
-
-      retiro_ts: new Date().toISOString(),
-      cierre_ts: null,
-      hora_regreso: null,
+  // Si cambian elementos, recalculamos regla de cartuchos
+  function bindReglaCartuchosLive() {
+    const hook = (elContainer, cartContainer) => {
+      if (!elContainer || !cartContainer) return;
+      elContainer.addEventListener("change", () => aplicarReglaCartuchos(elContainer, cartContainer));
     };
-
-    const next = {
-      ...baseStore,
-      version: 1,
-      retiros: [retiro, ...(baseStore.retiros || [])],
-    };
-
-    const okSave = await guardarBaseEnServidor(next);
-    if (!okSave) return;
-
-    limpiarSeleccionBase();
-    await cargarBaseDesdeServidor();
-    alert("RETIRO registrado (ABIERTO).");
+    hook(p1Elementos, p1Cartuchos);
+    hook(p2Elementos, p2Cartuchos);
   }
-
-  async function onCerrarRetiro() {
-    await cargarBaseDesdeServidor();
-
-    if (!retiroSeleccionadoId) return alert("Seleccioná un retiro abierto primero.");
-    const idx = (baseStore.retiros || []).findIndex((r) => r?.id === retiroSeleccionadoId && r?.estado === "ABIERTO");
-    if (idx < 0) {
-      retiroSeleccionadoId = null;
-      renderBasePreview();
-      return alert("Ese retiro ya no está ABIERTO.");
-    }
-
-    const r = baseStore.retiros[idx];
-    r.estado = "CERRADO";
-    r.hora_regreso = hhmmNow();
-    r.cierre_ts = new Date().toISOString();
-
-    const next = { ...baseStore, retiros: [...baseStore.retiros] };
-    const okSave = await guardarBaseEnServidor(next);
-    if (!okSave) return;
-
-    retiroSeleccionadoId = null;
-    await cargarBaseDesdeServidor();
-    alert("RETIRO cerrado (ingreso de regreso).");
-  }
-
-  if (btnRegistrarRetiro) btnRegistrarRetiro.addEventListener("click", () => onRegistrarRetiro().catch((e) => console.error(e)));
-  if (btnCerrarRetiro) btnCerrarRetiro.addEventListener("click", () => onCerrarRetiro().catch((e) => console.error(e)));
-  if (btnRefrescarRetiros) btnRefrescarRetiros.addEventListener("click", () => cargarBaseDesdeServidor().catch((e) => console.error(e)));
 
   // ======================================================
   // INIT
@@ -981,18 +1244,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     ultimoPublicadoId = 0;
     actualizarEstadoPublicar();
 
-    // base / retiros
-    if (inpHoraRetiro) inpHoraRetiro.value = hhmmNow();
-    cargarLugaresBase();
+    // lugares (guardia)
+    cargarLugaresParaGuardia();
 
-    // preview base vacío, después carga real
-    baseStore = { version: 1, retiros: [] };
-    retiroSeleccionadoId = null;
-    renderBasePreview();
-
-    // inventario -> chips -> retiros
+    // inventario + guardia
     await invLoad();
-    await cargarBaseDesdeServidor();
+    await cargarGuardiaDesdeServidor();
+
+    bindAccionesEstado();
+    bindReglaCartuchosLive();
+
+    renderGuardiaPreview();
   }
 
   // ======================================================
@@ -1064,3 +1326,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Tab inicial
   activarTab("ordenes");
 });
+  // Tab inicial
+  activarTab("ordenes");
+});
+
