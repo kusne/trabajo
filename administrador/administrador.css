@@ -30,6 +30,7 @@
   box-shadow: 0 1px 8px rgba(0,0,0,.08);
 }
 
+/* panels principales */
 .tab-panel{
   display:none;
 }
@@ -90,18 +91,32 @@
   margin-top:-6px;
 }
 
+/* ✅ CONTENEDOR PRINCIPAL DE GUARDIA (PATRULLA PANEL / INVENTARIO BOX)
+   Antes estaba en flex y te rompía todo el layout.
+*/
 .guardia-box{
   margin-top:12px;
   padding:12px;
   border:1px solid #e5e7eb;
   border-radius:14px;
   background:#fff;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:14px;
+
+  /* clave: que sea contenedor normal */
+  display:block;
 }
 
+/* (si todavía usás acciones en una fila dentro de alguna guardia-box) */
+.guardia-actions{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+
+/* ✅ Subsolapas patrullas: que el CSS base ya soporte el comportamiento */
+.patrulla-panel{ display:none; }
+.patrulla-panel.is-active{ display:block; }
+
+/* labels de “tarjeta” (si las usás en algún bloque) */
 .label{
   font-size:12px;
   color:#6b7280;
@@ -113,12 +128,6 @@
 .value{
   font-size:15px;
   font-weight:700;
-}
-
-.guardia-actions{
-  display:flex;
-  gap:10px;
-  align-items:center;
 }
 
 .json-preview{
