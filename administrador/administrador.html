@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="../funciones/estilos/base.css">
   <link rel="stylesheet" href="./administrador.css">
 
-  <!-- UI: Subsolapas Patrullas (solo visual, no rompe lógica) -->
+  <!-- UI: Subsolapas Patrullas -->
   <style>
     .subtabs{
       display:flex;
@@ -37,6 +37,17 @@
     /* paneles: por defecto ocultos */
     .patrulla-panel{ display:none; }
     .patrulla-panel.is-active{ display:block; }
+
+    /* BLINDAJE: si otro CSS mete display:block, acá manda igual */
+    #tab-guardia .patrulla-panel{ display:none !important; }
+    #tab-guardia .patrulla-panel.is-active{ display:block !important; }
+
+    /* este contenedor es un formulario: que no use el layout flex tipo "tarjeta" */
+    #tab-guardia .guardia-box.guardia-form{
+      display:block !important;
+      justify-content:initial !important;
+      align-items:initial !important;
+    }
   </style>
 </head>
 
@@ -136,7 +147,7 @@
       </div>
 
       <!-- PATRULLA 1 (panel) -->
-      <div class="guardia-box patrulla-panel is-active" id="patrulla-p1" style="margin-bottom:14px;">
+      <div class="guardia-box guardia-form patrulla-panel is-active" id="patrulla-p1" style="margin-bottom:14px;">
         <h3 style="margin-top:0;">Patrulla 1</h3>
 
         <div class="row" style="gap:10px; align-items:flex-end;">
@@ -173,7 +184,7 @@
       </div>
 
       <!-- PATRULLA 2 (panel) -->
-      <div class="guardia-box patrulla-panel" id="patrulla-p2">
+      <div class="guardia-box guardia-form patrulla-panel" id="patrulla-p2">
         <h3 style="margin-top:0;">Patrulla 2</h3>
 
         <div class="row" style="gap:10px; align-items:flex-end;">
