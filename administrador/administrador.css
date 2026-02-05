@@ -1,185 +1,178 @@
-/* administrador.css */
+/* ===== Base layout ===== */
+.app{
+  max-width: 980px;
+  margin: 24px auto;
+  padding: 0 16px;
+}
 
-/* ===================== TOPBAR + TABS ===================== */
+.card{
+  background: rgba(255,255,255,.75);
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 0 12px 30px rgba(0,0,0,.06);
+  backdrop-filter: blur(8px);
+}
+
 .topbar{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:12px;
-  margin-bottom:14px;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 
 .tabs{
   display:flex;
-  gap:8px;
-  background:#f1f3f5;
-  padding:6px;
-  border-radius:999px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .tab-btn{
-  border:0;
-  background:transparent;
-  padding:10px 14px;
-  border-radius:999px;
+  border: 1px solid rgba(0,0,0,.12);
+  background: rgba(255,255,255,.7);
+  padding: 10px 14px;
+  border-radius: 999px;
   cursor:pointer;
-  font-weight:600;
 }
 
 .tab-btn.is-active{
-  background:#fff;
-  box-shadow: 0 1px 8px rgba(0,0,0,.08);
+  border-color: rgba(0,0,0,.18);
+  background: rgba(0,0,0,.06);
 }
 
-/* panels principales */
 .tab-panel{
   display:none;
+  margin-top: 10px;
 }
 
 .tab-panel.is-active{
   display:block;
 }
 
-/* ===================== UTILIDADES ===================== */
-.row{
-  display:flex;
-  gap:10px;
-  align-items:center;
-  margin-top:10px;
-  flex-wrap:wrap;
+label{
+  display:block;
+  margin-top: 12px;
+  margin-bottom: 6px;
+  font-weight: 600;
 }
 
-.full{ width:100%; }
+.top-label{
+  margin-top: 0;
+}
+
+input, select, textarea{
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,.15);
+  background: rgba(255,255,255,.9);
+  outline: none;
+}
+
+textarea{
+  resize: vertical;
+}
 
 .muted{
-  color:#6b7280;
-  margin-top:-6px;
+  opacity: .7;
+  margin-top: 6px;
+  margin-bottom: 12px;
 }
 
-/* ===================== BOTONES ===================== */
-.btn-primary_toggle, .btn-primary{
-  background:#111827;
-  color:#fff;
-  border:0;
-  border-radius:10px;
-  padding:10px 14px;
-  cursor:pointer;
+.error{
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255,0,0,.10);
+  border: 1px solid rgba(255,0,0,.20);
 }
 
-.btn-success{
-  background:#2e7d32;
-  color:#fff;
-  border:0;
-  border-radius:10px;
-  padding:10px 14px;
-  cursor:pointer;
-  font-weight:700;
+.row{
+  display:flex;
+  gap: 10px;
+  align-items:center;
+  margin-top: 14px;
+  flex-wrap: wrap;
 }
 
-.btn-danger{
-  background:#c62828;
-  color:#fff;
-  border:0;
-  border-radius:10px;
+.btn-primary{
   padding:10px 14px;
+  border-radius:12px;
+  border:0;
   cursor:pointer;
 }
 
 .btn-ghost{
-  background:#fff;
-  color:#111827;
-  border:1px solid #d0d7de;
-  border-radius:10px;
   padding:10px 14px;
+  border-radius:12px;
+  background:transparent;
+  border:1px solid rgba(0,0,0,.15);
   cursor:pointer;
 }
 
-/* ===================== GUARDIA BOX ===================== */
-/* OJO: esto NO debe ser flex para formularios (patrullas, inventario) */
-.guardia-box{
-  margin-top:12px;
-  padding:12px;
-  border:1px solid #e5e7eb;
-  border-radius:14px;
-  background:#fff;
-  display:block; /* clave */
+.btn-danger{
+  margin-top: 10px;
+  padding:10px 14px;
+  border-radius:12px;
+  border:0;
+  cursor:pointer;
+  background: rgba(220,38,38,.90);
+  color: #fff;
 }
 
-/* si en algún lugar usás un bloque de acciones dentro */
-.guardia-actions{
+.afinalizar-row{
   display:flex;
   gap:10px;
   align-items:center;
+  margin-top:10px;
 }
 
-/* ===================== SUBSOLAPAS PATRULLAS ===================== */
-/* (si ya las definís inline en el HTML, igual no molesta que estén acá también) */
-.subtabs{
-  display:flex;
-  gap:8px;
-  margin:10px 0 14px;
-  flex-wrap:wrap;
-  align-items:center;
+.afinalizar-text{
+  font-size: 12px;
+  opacity: .75;
 }
 
-.subtab-btn{
-  border:1px solid #d0d7de;
-  background:#fff;
-  padding:8px 12px;
-  border-radius:999px;
-  cursor:pointer;
-  font-weight:700;
+.state{
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,.12);
+  background: rgba(255,255,255,.6);
 }
 
-.subtab-btn.is-active{
-  border-color:#111827;
-  box-shadow: 0 1px 8px rgba(0,0,0,.08);
-}
-
-.subtab-btn:disabled{
-  opacity:.45;
-  cursor:not-allowed;
-}
-
-/* ===================== PANELES PATRULLAS (LA CLAVE) ===================== */
-/* Por defecto, oculto todo */
-.patrulla-panel{
-  display:none;
-}
-
-/* Solo el activo se ve */
-.patrulla-panel.is-active{
-  display:block;
-}
-
-/* BLINDAJE: si algo mete style="display:block" o una regla global, acá manda igual */
-#tab-guardia .patrulla-panel{
-  display:none !important;
-}
-#tab-guardia .patrulla-panel.is-active{
-  display:block !important;
-}
-
-/* ===================== "TARJETA" LABEL/VALUE (si las usás) ===================== */
-.label{
-  font-size:12px;
-  color:#6b7280;
-  font-weight:700;
-  text-transform:uppercase;
-  letter-spacing:.04em;
-}
-
-.value{
-  font-size:15px;
-  font-weight:700;
-}
-
-/* ===================== JSON PREVIEW ===================== */
 .json-preview{
-  background:#0b1020;
+  background:#0f172a;
   color:#e5e7eb;
-  padding:12px;
-  border-radius:12px;
+  padding:14px;
+  border-radius:14px;
   overflow:auto;
-  min-height:80px;
+}
+
+/* ===== Libro memorándum ===== */
+.row-actions{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  margin-top:10px;
+  margin-bottom:16px;
+}
+
+.list{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  margin:10px 0 16px;
+}
+
+.list-item{
+  border:1px solid rgba(0,0,0,.12);
+  border-radius:14px;
+  padding:10px 12px;
+  background:rgba(255,255,255,.75);
+}
+
+.list-item .meta{
+  font-size:12px;
+  opacity:.7;
+  margin-bottom:6px;
 }
