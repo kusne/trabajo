@@ -1,74 +1,38 @@
-// Administrador (bootstrap modular)
-
-import { wireGlobalBridge } from "./js/bridge.js";
-import { createSupabaseClient } from "./js/supabaseClient.js";
-import { createSubtabsPatrullas } from "./js/subtabsPatrullas.js";
-import { initTabs } from "./js/tabs.js";
+import { createSbClient } from "../funciones/js/supabaseClient.js";
 import { initAuth } from "./js/auth.js";
+import { initTabs } from "./js/tabs.js";
 import { initOrdenes } from "./js/ordenes.js";
-import { initInventario } from "./js/inventario.js";
 import { initGuardia } from "./js/guardia.js";
+import { initInventario } from "./js/inventario.js";
+import { initLibroMemorandum } from "./js/libroMemorandum.js";
 
-wireGlobalBridge();
-console.log("Administrador cargado OK (modo modular)");
+const sb = createSbClient();
 
 document.addEventListener("DOMContentLoaded", async () => {
-  // Supabase client (usa el CDN ya cargado en el HTML)
-  const sb = createSupabaseClient();
+  const auth = initAuth({ sb });
+  const tabs = initTabs({ defaultTab: "ordenes" });
 
-  // Subsolapas (Patrullas)
-  const subtabs = createSubtabsPatrullas();
-
-  // Módulos
-  const guardia = initGuardia({ sb, subtabs });
+  const ordenes = initOrdenes({ sb });
+  const guardia = initGuardia({ sb });
   const inventario = initInventario({ sb });
-  const ordenes = initOrdenes({
-    sb,
-    onOrdenesChanged: () => {
-      // cuando cambian órdenes, refrescamos lugares de guardia
-      try { guardia.cargarLugaresParaGuardia(); } catch { }
-    },
-  });
+  const libro = initLibroMemorandum({ sb });
 
-  // Bind (event listeners)
   ordenes.bind();
-  inventario.bind();
   guardia.bind();
+  inventario.bind();
+  libro.bind();
 
-  // Tabs principales
-  const tabs = initTabs({
-    onGuardiaActivate: () => {
-      subtabs.boot();
-      subtabs.apply();
-    },
-  });
-
-  // Boot autenticación + init de app cuando hay sesión
-  const auth = initAuth({
-    sb,
+  await auth.init({
     onLoggedIn: async () => {
-      // Ordenes
-      ordenes.limpiarOrdenesCaducadas();
-      ordenes.actualizarSelector();
-      ordenes.resetPublishState();
+      tabs.show();
 
-      // Guardia
-      try { guardia.cargarLugaresParaGuardia(); } catch { }
-      subtabs.boot();
-      subtabs.apply();
-
-      // Carga datos
-      await inventario.invLoad();
+      await ordenes.init();
+      await inventario.init();
       await guardia.init({ invLoad: inventario.invLoad });
-
-      // Tab inicial
-      tabs.activarTab("ordenes");
+      await libro.init();
+    },
+    onLoggedOut: () => {
+      tabs.hide();
     },
   });
-
-  auth.bind();
-  await auth.bootSession();
-
-  // Si está logueado, el init de arriba ya seteó la tab.
-  // Si NO está logueado, mantenemos la UI oculta sin tocar tabs.
 });
