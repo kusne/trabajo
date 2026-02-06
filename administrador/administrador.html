@@ -9,7 +9,6 @@
   <link rel="stylesheet" href="./administrador.css" />
 
   <style>
-    /* Si ya lo tenías, lo dejo; si no, no molesta */
     .hidden { display:none !important; }
   </style>
 </head>
@@ -110,28 +109,61 @@
       <section id="tab-inventario" class="tab-panel">
         <h2>Inventario</h2>
         <p class="muted">Inventario (móviles, motos, elementos). (Tu módulo actual queda intacto.)</p>
-
-        <!-- Tu inventario actual (si ya está en el HTML, dejalo tal cual). -->
         <div id="inventarioRoot"></div>
       </section>
 
-      <!-- TAB: LIBRO MEMORÁNDUM -->
+      <!-- TAB: LIBRO MEMORÁNDUM (3 columnas) -->
       <section id="tab-libro" class="tab-panel">
         <h2>Libro memorándum</h2>
         <p class="muted">
-          Cargá asientos del libro memorándum. Se guarda como JSON (id=1) en Supabase.
+          3 columnas: causa · hora · novedad/referencia. Se guarda como JSON (id=1) en Supabase.
         </p>
 
-        <label class="top-label">Asiento</label>
-        <textarea id="libroTexto" rows="5" placeholder="Escribí el asiento..."></textarea>
+        <div class="grid-3col">
+          <div>
+            <label class="top-label">Causa</label>
+            <select id="memoCausa">
+              <option value="">Seleccionar</option>
+              <option value="Ingreso">Ingreso</option>
+              <option value="Retiro">Retiro</option>
+              <option value="Franco">Franco</option>
+              <option value="Constancia">Constancia</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="top-label">Hora</label>
+            <input id="memoHora" type="time" />
+          </div>
+
+          <div>
+            <label class="top-label">Novedad / Referencia</label>
+            <textarea id="memoNovedad" rows="3"
+              placeholder="Ej: Móvil 10139 a cargo del Oficial Cardozo junto al Suboficial Aquino..."></textarea>
+          </div>
+        </div>
 
         <div class="row-actions">
-          <button type="button" id="btnLibroAgregar" class="btn-primary">Agregar asiento</button>
+          <button type="button" id="btnLibroAgregar" class="btn-primary">Agregar</button>
           <button type="button" id="btnLibroLimpiar" class="btn-ghost">Limpiar</button>
         </div>
 
         <h3>Últimos asientos</h3>
-        <div id="libroLista" class="list"></div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Causa</th>
+                <th>Hora</th>
+                <th>Novedad / Referencia</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="memoTbody">
+              <tr><td colspan="4" class="muted">Sin asientos todavía.</td></tr>
+            </tbody>
+          </table>
+        </div>
 
         <h3>Salida JSON (preview)</h3>
         <pre id="libroJsonPreview" class="json-preview">{}</pre>
