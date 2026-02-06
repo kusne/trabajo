@@ -1,545 +1,109 @@
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
-import { esc, slugifyValue, normalizarLugar, cloneDeep, isoNow, hhmmArNow } from "./utils.js";
-import { getSessionOrNull, patchOrInsertStore } from "./supabaseClient.js";
-import { state, setGuardiaState, subscribeInventario } from "./state.js";
-import { invActivos, invLabelFromValue } from "./inventario.js";
-
-// ======================================================
-// GUARDIA (guardia_estado.id=1)
-// ======================================================
-
-// SUBGRUPOS (CANON + ORDEN FIJO)
-const SUBGRUPO_CANON = [
-  { key: "alometros", label: "Alometros" },
-  { key: "alcoholimetros", label: "Alcoholimetros" },
-  { key: "pdas", label: "PDAs" },
-  { key: "impresoras", label: "Impresoras" },
-  { key: "ht", label: "Ht" },
-  { key: "escopetas", label: "Escopetas" },
-  { key: "cartuchos", label: "Cartuchos" },
-];
-
-const SUBGRUPO_KEY_TO_LABEL = new Map(SUBGRUPO_CANON.map((x) => [x.key, x.label]));
-const SUBGRUPOS_ORDEN = SUBGRUPO_CANON.map((x) => x.label);
-
-function normalizeKey(s) {
-  return String(s || "")
-    .trim()
-    .toLowerCase()
-    .replace(/[áàäâ]/g, "a")
-    .replace(/[éèëê]/g, "e")
-    .replace(/[íìïî]/g, "i")
-    .replace(/[óòöô]/g, "o")
-    .replace(/[úùüû]/g, "u")
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-function getSubgrupoLabel(meta) {
-  const raw = meta?.subgrupo || meta?.subGroup || meta?.grupo || meta?.group || "";
-  const k = normalizeKey(raw);
-  if (SUBGRUPO_KEY_TO_LABEL.has(k)) return SUBGRUPO_KEY_TO_LABEL.get(k);
-  return raw ? String(raw).trim() : "";
-}
-
-function groupElementosBySubgrupo(elementoValues = []) {
-  // agrupa por subgrupo canonical
-  const map = new Map();
-  elementoValues.forEach((val) => {
-    const meta = invActivos("elemento").find((x) => x.value === val)?.meta || {};
-    const label = getSubgrupoLabel(meta) || "Otros";
-    if (!map.has(label)) map.set(label, []);
-    map.get(label).push(val);
-  });
-
-  // orden por SUBGRUPOS_ORDEN (lo que no está, al final)
-  const keys = Array.from(map.keys());
-  keys.sort((a, b) => {
-    const ia = SUBGRUPOS_ORDEN.indexOf(a);
-    const ib = SUBGRUPOS_ORDEN.indexOf(b);
-    if (ia === -1 && ib === -1) return a.localeCompare(b);
-    if (ia === -1) return 1;
-    if (ib === -1) return -1;
-    return ia - ib;
-  });
-
-  const ordered = [];
-  keys.forEach((k) => ordered.push([k, map.get(k)]));
-  return ordered;
-}
-
-function readCheckedValues(container) {
-  if (!container) return [];
-  return Array.from(container.querySelectorAll("input[type=checkbox][data-value]"))
-    .filter((x) => x.checked)
-    .map((x) => x.getAttribute("data-value"))
-    .filter(Boolean);
-}
-
-function renderChips(container, items, checkedValues = []) {
-  if (!container) return;
-  container.innerHTML = "";
-  items.forEach((it) => {
-    const id = `chk_${slugifyValue(it.value)}_${Math.random().toString(16).slice(2)}`;
-    const wrap = document.createElement("label");
-    wrap.className = "chip";
-
-    const chk = document.createElement("input");
-    chk.type = "checkbox";
-    chk.id = id;
-    chk.setAttribute("data-value", it.value);
-    chk.checked = checkedValues.includes(it.value);
-
-    const span = document.createElement("span");
-    span.textContent = it.label;
-
-    wrap.appendChild(chk);
-    wrap.appendChild(span);
-    container.appendChild(wrap);
-  });
-}
-
-function renderMoviles(container, items, selected = []) {
-  if (!container) return;
-  container.innerHTML = "";
-
-  // un móvil seleccionado = { movil_id, obs }
-  const selectedIds = new Set(selected.map((x) => x.movil_id));
-
-  items.forEach((it) => {
-    const row = document.createElement("div");
-    row.className = "row-inline";
-
-    const id = `mov_${slugifyValue(it.value)}_${Math.random().toString(16).slice(2)}`;
-
-    const chk = document.createElement("input");
-    chk.type = "checkbox";
-    chk.id = id;
-    chk.checked = selectedIds.has(it.value);
-    chk.setAttribute("data-value", it.value);
-
-    const label = document.createElement("label");
-    label.setAttribute("for", id);
-    label.textContent = it.label;
-
-    const obs = document.createElement("input");
-    obs.type = "text";
-    obs.placeholder = "Obs (opcional)";
-    obs.className = "mini";
-    const found = selected.find((x) => x.movil_id === it.value);
-    obs.value = found?.obs || "";
-    obs.disabled = !chk.checked;
-
-    chk.addEventListener("change", () => {
-      obs.disabled = !chk.checked;
-      if (!chk.checked) obs.value = "";
-    });
-
-    row.appendChild(chk);
-    row.appendChild(label);
-    row.appendChild(obs);
-
-    container.appendChild(row);
-  });
-}
-
-function readMoviles(container) {
-  if (!container) return [];
-  const rows = Array.from(container.querySelectorAll(".row-inline"));
-  const out = [];
-  rows.forEach((row) => {
-    const chk = row.querySelector("input[type=checkbox][data-value]");
-    const obs = row.querySelector("input[type=text]");
-    if (chk?.checked) {
-      out.push({ movil_id: chk.getAttribute("data-value"), obs: (obs?.value || "").trim() });
-    }
-  });
-  return out;
-}
-
-function aplicarReglaCartuchos(elementosContainer, cartuchosContainer, precomputedElementosIds = null) {
-  if (!elementosContainer || !cartuchosContainer) return;
-
-  // Si hay escopetas seleccionadas => habilitar cartuchos
-  const elementosIds = precomputedElementosIds || readCheckedValues(elementosContainer);
-  const hayEscopeta = elementosIds.some((id) => {
-    const label = invLabelFromValue("elemento", id).toLowerCase();
-    return label.includes("escopeta");
-  });
-
-  cartuchosContainer.style.display = hayEscopeta ? "block" : "none";
-  // si no hay escopeta, desmarcar todo
-  if (!hayEscopeta) {
-    cartuchosContainer.querySelectorAll("input[type=checkbox]").forEach((c) => (c.checked = false));
-  }
-}
-
-function renderCartuchos(container, checkedMap = {}) {
-  if (!container) return;
-  container.innerHTML = "";
-
-  const tipos = [
-    { key: "posta", label: "Posta" },
-    { key: "antitumulto", label: "Antitumulto" },
-    { key: "goma", label: "Goma" },
-  ];
-
-  tipos.forEach((t) => {
-    const id = `cart_${t.key}_${Math.random().toString(16).slice(2)}`;
-    const wrap = document.createElement("label");
-    wrap.className = "chip";
-
-    const chk = document.createElement("input");
-    chk.type = "checkbox";
-    chk.id = id;
-    chk.setAttribute("data-key", t.key);
-    chk.checked = Boolean(checkedMap?.[t.key]);
-
-    const span = document.createElement("span");
-    span.textContent = t.label;
-
-    wrap.appendChild(chk);
-    wrap.appendChild(span);
-    container.appendChild(wrap);
-  });
-}
-
-function readCartuchos(container) {
-  if (!container) return {};
-  const map = {};
-  Array.from(container.querySelectorAll("input[type=checkbox][data-key]")).forEach((c) => {
-    map[c.getAttribute("data-key")] = c.checked;
-  });
-  return map;
-}
-
-function formatLogEntry(e) {
-  const ts = e?.hora || "";
-  const p = e?.patrulla || "";
-  const a = e?.accion || "";
-  const r = e?.resumen || "";
-  return `${ts} ${p} ${a}: ${r}`;
-}
-
-export function initGuardia({ sb, subtabs } = {}) {
-  // ===== DOM refs (tolerantes) =====
-  const elEstadoTxt = () => document.getElementById("guardiaEstadoTxt");
-  const elPreview = () => document.getElementById("guardiaJsonPreview");
-
-  const btnGuardiaGuardar = document.getElementById("btnGuardiaGuardar");
-  const btnGuardiaActualizar = document.getElementById("btnGuardiaActualizar");
-
-  const p1Lugar = document.getElementById("p1Lugar");
-  const p1Obs = document.getElementById("p1Obs");
-  const p1Personal = document.getElementById("p1Personal");
-  const p1Moviles = document.getElementById("p1Moviles");
-  const p1Elementos = document.getElementById("p1Elementos");
-  const p1Cartuchos = document.getElementById("p1Cartuchos");
-
-  const p2Lugar = document.getElementById("p2Lugar");
-  const p2Obs = document.getElementById("p2Obs");
-  const p2Personal = document.getElementById("p2Personal");
-  const p2Moviles = document.getElementById("p2Moviles");
-  const p2Elementos = document.getElementById("p2Elementos");
-  const p2Cartuchos = document.getElementById("p2Cartuchos");
-
-  let guardiaState = state?.guardia || null;
-
-  function setEstado(s) {
-    const el = elEstadoTxt();
-    if (el) el.textContent = s || "";
-  }
-
-  function renderGuardiaPreview() {
-    const pre = elPreview();
-    if (pre) pre.textContent = JSON.stringify(guardiaState || {}, null, 2);
-  }
-
-  function fillSelectOptions(selectEl, opts, currentVal = "") {
-    if (!selectEl) return;
-    const val = currentVal || "";
-    selectEl.innerHTML = `<option value="">Seleccionar</option>` + opts.map((o) => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
-    if (val) selectEl.value = val;
-  }
-
-  function getLugaresFromOrdenes() {
-    // toma lugares normalizados desde órdenes publicadas (state.ordenes)
-    const out = new Set();
-    const ords = Array.isArray(state?.ordenes) ? state.ordenes : [];
-    ords.forEach((o) => {
-      const franjas = Array.isArray(o?.franjas) ? o.franjas : [];
-      franjas.forEach((f) => {
-        const l = normalizarLugar(f?.lugar || "");
-        if (l) out.add(l);
-      });
-    });
-    return Array.from(out).sort((a, b) => a.localeCompare(b));
-  }
-
-  function renderGuardiaDesdeInventario() {
-    // Lugares (desde órdenes)
-    const lugares = getLugaresFromOrdenes();
-    fillSelectOptions(p1Lugar, lugares, guardiaState?.patrullas?.p1?.lugar || "");
-    fillSelectOptions(p2Lugar, lugares, guardiaState?.patrullas?.p2?.lugar || "");
-
-    // Inventario activo
-    const pers = invActivos("personal");
-    const movs = invActivos("movil");
-    const elems = invActivos("elemento");
-
-    // Estado actual
-    const p1 = guardiaState?.patrullas?.p1 || {};
-    const p2 = guardiaState?.patrullas?.p2 || {};
-
-    renderChips(p1Personal, pers, p1.personal_ids || []);
-    renderChips(p2Personal, pers, p2.personal_ids || []);
-
-    renderMoviles(p1Moviles, movs, p1.moviles || []);
-    renderMoviles(p2Moviles, movs, p2.moviles || []);
-
-    // Elementos con agrupación y orden fijo
-    const p1Elems = p1.elementos_ids || [];
-    const p2Elems = p2.elementos_ids || [];
-
-    const groups1 = groupElementosBySubgrupo(elems.map((x) => x.value));
-    const groups2 = groups1; // mismo orden
-
-    // Render elementos como chips en un bloque por subgrupo
-    const renderElementosGrouped = (container, checked, groups) => {
-      if (!container) return;
-      container.innerHTML = "";
-      groups.forEach(([label, vals]) => {
-        const h = document.createElement("div");
-        h.className = "subhead";
-        h.textContent = label;
-        container.appendChild(h);
-
-        const row = document.createElement("div");
-        row.className = "chip-grid";
-
-        const items = vals.map((v) => {
-          const it = elems.find((x) => x.value === v);
-          return it || { label: v, value: v };
-        });
-        renderChips(row, items, checked);
-        container.appendChild(row);
-      });
-    };
-
-    renderElementosGrouped(p1Elementos, p1Elems, groups1);
-    renderElementosGrouped(p2Elementos, p2Elems, groups2);
-
-    // Cartuchos (visible si hay escopeta)
-    renderCartuchos(p1Cartuchos, p1.cartuchos_map || {});
-    renderCartuchos(p2Cartuchos, p2.cartuchos_map || {});
-
-    aplicarReglaCartuchos(p1Elementos, p1Cartuchos, p1Elems);
-    aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2Elems);
-
-    // Obs
-    if (p1Obs) p1Obs.value = p1.obs || "";
-    if (p2Obs) p2Obs.value = p2.obs || "";
-  }
-
-  function aplicarStateAGuardiaUI() {
-    guardiaState = state?.guardia || guardiaState || null;
-    renderGuardiaDesdeInventario();
-    renderGuardiaPreview();
-
-    const logLen = Array.isArray(guardiaState?.log) ? guardiaState.log.length : 0;
-    setEstado(logLen ? `OK · Logs: ${logLen}` : "OK");
-  }
-
-  function buildStateFromUI() {
-    const p1PersonalIds = readCheckedValues(p1Personal);
-    const p2PersonalIds = readCheckedValues(p2Personal);
-
-    const p1Mov = readMoviles(p1Moviles);
-    const p2Mov = readMoviles(p2Moviles);
-
-    const p1Elem = readCheckedValues(p1Elementos);
-    const p2Elem = readCheckedValues(p2Elementos);
-
-    aplicarReglaCartuchos(p1Elementos, p1Cartuchos, p1Elem);
-    aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2Elem);
-
-    const p1CartMap = readCartuchos(p1Cartuchos);
-    const p2CartMap = readCartuchos(p2Cartuchos);
-
-    const next = cloneDeep(guardiaState || {});
-    next.version = 1;
-    next.updated_at_ts = isoNow();
-
-    next.patrullas = next.patrullas || {};
-    next.patrullas.p1 = next.patrullas.p1 || {};
-    next.patrullas.p2 = next.patrullas.p2 || {};
-
-    next.patrullas.p1.lugar = normalizarLugar(p1Lugar?.value || "");
-    next.patrullas.p1.obs = (p1Obs?.value || "").trim();
-    next.patrullas.p1.personal_ids = undefined;
-    next.patrullas.p1.personal_ids = p1PersonalIds;
-    next.patrullas.p1.moviles = p1Mov;
-    next.patrullas.p1.elementos_ids = p1Elem;
-    next.patrullas.p1.cartuchos_map = p1CartMap;
-
-    next.patrullas.p2.lugar = normalizarLugar(p2Lugar?.value || "");
-    next.patrullas.p2.obs = (p2Obs?.value || "").trim();
-    next.patrullas.p2.personal_ids = p2PersonalIds;
-    next.patrullas.p2.moviles = p2Mov;
-    next.patrullas.p2.elementos_ids = p2Elem;
-    next.patrullas.p2.cartuchos_map = p2CartMap;
-
-    return next;
-  }
-
-  async function cargarGuardiaDesdeServidor() {
-    const session = await getSessionOrNull(sb);
-    if (!session) return null;
-
-    const url = `${SUPABASE_URL}/rest/v1/guardia_estado?id=eq.1&select=payload`;
-    const resp = await fetch(url, {
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: "Bearer " + session.access_token,
-        Accept: "application/json",
+// administrador/administrador.js (ENTRYPOINT MODULAR)
+// - Importa Supabase client desde ./js (NO desde ../funciones)
+// - Inicializa auth + tabs + módulos (ordenes/guardia/inventario/libro)
+// - Mantiene puentes globales para onclick legacy
+
+import { createSupabaseClient } from "./js/supabaseClient.js";
+
+import { initAuth } from "./js/auth.js";
+import { initTabs } from "./js/tabs.js";
+
+import { initOrdenes } from "./js/ordenes.js";
+import { initGuardia } from "./js/guardia.js";
+import { initInventario } from "./js/inventario.js";
+import { initLibroMemorandum } from "./js/libroMemorandum.js";
+
+// Subsolapas Patrullas (P1/P2)
+import { createSubtabsPatrullas } from "./js/subtabsPatrullas.js";
+
+// ===============================
+// Puentes globales (compat HTML)
+// ===============================
+window.agregarOrden = function () {
+  if (typeof window.__adm_agregarOrden === "function") return window.__adm_agregarOrden();
+  alert("ADM no inicializó agregarOrden. Ctrl+F5 y revisá consola.");
+};
+
+window.publicarOrdenes = function () {
+  if (typeof window.__adm_publicarOrdenes === "function") return window.__adm_publicarOrdenes();
+  alert("ADM no inicializó publicarOrdenes. Ctrl+F5 y revisá consola.");
+};
+
+window.eliminarOrden = function () {
+  if (typeof window.__adm_eliminarOrden === "function") return window.__adm_eliminarOrden();
+  alert("ADM no inicializó eliminarOrden. Ctrl+F5 y revisá consola.");
+};
+
+console.log("[ADM] entrypoint administrador.js cargado OK");
+
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    const sb = createSupabaseClient();
+
+    // Tabs (NO asumimos show/hide porque tu tabs.js puede exponer otra API)
+    const tabs = initTabs?.({ defaultTab: "ordenes" }) || null;
+
+    // Subtabs patrullas
+    const subtabs = typeof createSubtabsPatrullas === "function" ? createSubtabsPatrullas() : null;
+
+    // Módulos
+    const ordenes = initOrdenes?.({
+      sb,
+      onOrdenesChanged: () => {
+        // si guardia tiene refresh de lugares, lo llamamos
+        if (typeof guardia?.refreshLugares === "function") guardia.refreshLugares();
       },
     });
 
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    const payload = data?.[0]?.payload;
-    return payload && typeof payload === "object" ? payload : null;
-  }
+    const guardia = initGuardia?.({ sb, subtabs });
+    const inventario = initInventario?.({ sb });
+    const libro = initLibroMemorandum?.({ sb });
 
-  async function guardarGuardiaEnServidor(nextPayload) {
-    const session = await getSessionOrNull(sb);
-    if (!session) {
-      alert("No hay sesión activa. Volvé a iniciar sesión.");
-      return false;
+    // Bind
+    ordenes?.bind?.();
+    guardia?.bind?.();
+    inventario?.bind?.();
+    libro?.bind?.();
+
+    // Botón eliminar (si existe por id)
+    const btnEliminar = document.getElementById("btnEliminarOrden");
+    if (btnEliminar) {
+      btnEliminar.addEventListener("click", () => window.eliminarOrden());
     }
 
-    const res = await patchOrInsertStore({ table: "guardia_estado", payload: nextPayload, session });
-    if (!res.ok) {
-      console.error("[ADMIN] Error guardando guardia_estado:", res.status, res.text);
-      alert("Error guardando Guardia. Mirá Console (F12).");
-      return false;
+    // Auth
+    const auth = initAuth?.({ sb });
+
+    if (!auth?.init) {
+      throw new Error("auth.js no expone init(). Verificá tu módulo auth.js.");
     }
 
-    setGuardiaState(nextPayload);
-    guardiaState = nextPayload;
-    renderGuardiaPreview();
-    return true;
-  }
+    await auth.init({
+      onLoggedIn: async () => {
+        // Si tabs tiene show(), lo usamos. Si no, no rompemos.
+        if (typeof tabs?.show === "function") tabs.show();
 
-  async function onGuardarGuardia() {
-    const next = buildStateFromUI();
-    await guardarGuardiaEnServidor(next);
-    aplicarStateAGuardiaUI();
-  }
+        // Inits en orden lógico
+        if (typeof ordenes?.init === "function") await ordenes.init();
+        if (typeof inventario?.init === "function") await inventario.init();
 
-  async function onActualizarGuardia({ invLoad } = {}) {
-    const payload = await cargarGuardiaDesdeServidor();
-    if (payload) setGuardiaState(payload);
-    guardiaState = state?.guardia || payload || guardiaState;
-    renderGuardiaDesdeInventario();
-    renderGuardiaPreview();
-    setEstado(payload ? "Actualizado" : "Sin datos");
-    // si el entrypoint manda invLoad, guardia puede rehidratar inventario si corresponde
-    if (typeof invLoad === "function") {
-      try {
-        await invLoad();
-      } catch {}
-    }
-  }
+        if (typeof guardia?.init === "function") {
+          const invLoad = inventario?.invLoad;
+          await guardia.init(invLoad ? { invLoad } : undefined);
+        }
 
-  function refreshLugares() {
-    renderGuardiaDesdeInventario();
-  }
+        if (typeof libro?.init === "function") await libro.init();
 
-  function bindAccionesEstado() {
-    document.querySelectorAll("[data-accion][data-p]").forEach((btn) => {
-      btn.addEventListener("click", async () => {
-        const accion = btn.getAttribute("data-accion");
-        const p = btn.getAttribute("data-p");
-        if (!accion || !p) return;
+        // Set tab default si tu tabs.js expone activarTab()
+        if (typeof tabs?.activarTab === "function") tabs.activarTab("ordenes");
+      },
 
-        const next = buildStateFromUI();
-
-        const ts = isoNow();
-        const hora = hhmmArNow();
-
-        next.patrullas[p] = next.patrullas[p] || {};
-        next.patrullas[p].estado = accion;
-        next.patrullas[p].estado_ts = ts;
-
-        const pat = next.patrullas[p];
-        const perTxt = (pat.personal_ids || []).map((id) => invLabelFromValue("personal", id)).join(", ");
-        const movTxt = (pat.moviles || []).map((m) => invLabelFromValue("movil", m.movil_id)).join(", ");
-        const elemTxt = (pat.elementos_ids || []).map((id) => invLabelFromValue("elemento", id)).join(", ");
-
-        const resumen = `Personal: ${perTxt || "-"} | Movil(es): ${movTxt || "-"} | Elementos: ${elemTxt || "-"}`;
-
-        next.log = Array.isArray(next.log) ? next.log : [];
-        next.log.unshift({
-          patrulla: String(p).toUpperCase(),
-          accion,
-          hora,
-          ts,
-          resumen,
-          // snapshot estructurado para importación a Libro Memorándum
-          snapshot: {
-            lugar: pat.lugar || "",
-            obs: pat.obs || "",
-            personal_ids: Array.isArray(pat.personal_ids) ? [...pat.personal_ids] : [],
-            moviles: Array.isArray(pat.moviles) ? cloneDeep(pat.moviles) : [],
-            elementos_ids: Array.isArray(pat.elementos_ids) ? [...pat.elementos_ids] : [],
-            cartuchos_map: pat.cartuchos_map ? cloneDeep(pat.cartuchos_map) : {},
-          },
-        });
-
-        await guardarGuardiaEnServidor(next);
-        aplicarStateAGuardiaUI();
-      });
+      onLoggedOut: () => {
+        if (typeof tabs?.hide === "function") tabs.hide();
+      },
     });
+  } catch (err) {
+    console.error("[ADM] Error inicializando entrypoint:", err);
+    alert("Error inicializando ADM. Mirá Console (F12).");
   }
-
-  function bindReglaCartuchosLive() {
-    const hook = (elContainer, cartContainer) => {
-      if (!elContainer || !cartContainer) return;
-      elContainer.addEventListener("change", () => aplicarReglaCartuchos(elContainer, cartContainer));
-    };
-    hook(p1Elementos, p1Cartuchos);
-    hook(p2Elementos, p2Cartuchos);
-  }
-
-  function bind() {
-    if (btnGuardiaGuardar) btnGuardiaGuardar.addEventListener("click", () => onGuardarGuardia().catch(console.error));
-    if (btnGuardiaActualizar) {
-      btnGuardiaActualizar.addEventListener("click", () => onActualizarGuardia({ invLoad: null }).catch(console.error));
-    }
-
-    bindAccionesEstado();
-    bindReglaCartuchosLive();
-
-    // Re-render UI cuando cambia inventario
-    subscribeInventario(() => {
-      renderGuardiaDesdeInventario();
-      renderGuardiaPreview();
-    });
-  }
-
-  async function init({ invLoad } = {}) {
-    // Subtabs (si están presentes)
-    try {
-      if (subtabs?.boot) subtabs.boot();
-    } catch {}
-
-    // cargar guardia y pintar UI
-    await onActualizarGuardia({ invLoad });
-    renderGuardiaDesdeInventario();
-    renderGuardiaPreview();
-    setEstado("OK");
-  }
-
-  return { bind, init, refreshLugares };
-}
+});
