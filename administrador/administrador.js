@@ -2,6 +2,7 @@
 // - Importa Supabase client desde ./js (NO desde ../funciones)
 // - Inicializa auth + tabs + módulos (ordenes/guardia/inventario/libro)
 // - Mantiene puentes globales para onclick legacy
+// - Integra subtabsPatrullas (PASO 4)
 
 import { createSupabaseClient } from "./js/supabaseClient.js";
 
@@ -12,6 +13,9 @@ import { initOrdenes } from "./js/ordenes.js";
 import { initGuardia } from "./js/guardia.js";
 import { initInventario } from "./js/inventario.js";
 import { initLibroMemorandum } from "./js/libroMemorandum.js";
+
+// ✅ PASO 4: Subsolapas Patrullas (P1 / P2)
+import { createSubtabsPatrullas } from "./js/subtabsPatrullas.js";
 
 // ===============================
 // Puentes globales (compat HTML)
@@ -40,6 +44,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Tabs (NO asumimos show/hide porque tu tabs.js puede exponer otra API)
     const tabs = initTabs?.({ defaultTab: "ordenes" }) || null;
 
+    // ✅ PASO 4: Instancia subtabs (si el HTML tiene los botones/data-subtab correspondientes)
+    const subtabs = createSubtabsPatrullas?.() || null;
+
     // Módulos
     const ordenes = initOrdenes?.({
       sb,
@@ -49,7 +56,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       },
     });
 
-    const guardia = initGuardia?.({ sb });
+    // ✅ PASO 4: Pasamos subtabs a guardia
+    const guardia = initGuardia?.({ sb, subtabs });
+
     const inventario = initInventario?.({ sb });
     const libro = initLibroMemorandum?.({ sb });
 
@@ -83,6 +92,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (typeof guardia?.init === "function") {
           const invLoad = inventario?.invLoad;
+          // guardia.init acepta opcionalmente { invLoad } en tu diseño actual
           await guardia.init(invLoad ? { invLoad } : undefined);
         }
 
