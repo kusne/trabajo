@@ -13,6 +13,7 @@ export function createSupabaseClient() {
   ensureSupabaseLoaded();
   return window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
+export const createSbClient = createSupabaseClient;
 
 export async function getSessionOrNull(sb) {
   const { data: { session }, error } = await sb.auth.getSession();
