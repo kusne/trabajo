@@ -1,14 +1,44 @@
 // administrador/js/libroMemorandum.js
 // Tabla: public.libro_memorandum_store (id int PK, payload jsonb, updated_at timestamptz)
-// Guarda un único JSON (id=1) similar a guardia.
 
 import { state as appState } from "./state.js";
 
 const TABLE = "libro_memorandum_store";
 const ROW_ID = 1;
 
+function hhmmNowLocal() {
+  const d = new Date();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function escapeHtml(s) {
+  return String(s ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function validarHora(h) {
+  // <input type="time"> => "HH:MM"
+  const m = String(h || "").trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const hh = Number(m[1]);
+  const mm = Number(m[2]);
+  if (hh < 0 || hh > 23) return null;
+  if (mm < 0 || mm > 59) return null;
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+
 export function initLibroMemorandum({ sb }) {
-  // ===== DOM getters (no rompen si el tab no existe) =====
+  // ===== DOM getters =====
   const elCausa = () => document.getElementById("libroCausa");
   const elHora = () => document.getElementById("libroHora");
   const elNovedad = () => document.getElementById("libroNovedad");
@@ -21,19 +51,6 @@ export function initLibroMemorandum({ sb }) {
   const btnImportar = () => document.getElementById("btnLibroImportarGuardia");
 
   let state = { entries: [] };
-
-  function nowIso() {
-    return new Date().toISOString();
-  }
-
-  function escapeHtml(s) {
-    return String(s ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-  }
 
   async function getUserEmail() {
     try {
@@ -126,29 +143,42 @@ export function initLibroMemorandum({ sb }) {
 
   function limpiarForm() {
     if (elCausa()) elCausa().value = "";
-    if (elHora()) elHora().value = "";
     if (elNovedad()) elNovedad().value = "";
+    // la hora la dejamos auto
+    setHoraAuto();
   }
 
-  function validarHora(h) {
-    // soporta <input type="time"> => "HH:MM"
-    const m = String(h || "").trim().match(/^(\d{1,2}):(\d{2})$/);
-    if (!m) return null;
-    const hh = Number(m[1]);
-    const mm = Number(m[2]);
-    if (hh < 0 || hh > 23) return null;
-    if (mm < 0 || mm > 59) return null;
-    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  // ✅ NUEVO: setear hora automática en el input
+  function setHoraAuto() {
+    const h = elHora();
+    if (!h) return;
+    h.value = hhmmNowLocal();
+  }
+
+  // ✅ OPCIONAL: bloquear edición manual (si querés)
+  function lockHoraReadonly() {
+    const h = elHora();
+    if (!h) return;
+    // input type="time" no soporta readonly real en todos los navegadores,
+    // así que lo mejor es disabled=false y "pisa" al agregar.
+    // Si querés bloquear sí o sí: descomentá esto:
+    // h.disabled = true;
   }
 
   async function onAgregar() {
     const causa = (elCausa()?.value || "").trim();
-    const hora = validarHora((elHora()?.value || "").trim());
     const novedad = (elNovedad()?.value || "").trim();
 
     if (!causa) return alert("Seleccioná una causa.");
-    if (!hora) return alert("Hora inválida. Usá formato HH:MM (ej: 20:15).");
     if (!novedad) return alert("Escribí la novedad / referencia.");
+
+    // ✅ clave: la hora se toma del MOMENTO del click, no de un valor escrito
+    const horaAuto = hhmmNowLocal();
+    const hora = validarHora(horaAuto);
+    if (!hora) return alert("No se pudo obtener hora válida.");
+
+    // reflejamos en UI para que se vea qué se guardó
+    if (elHora()) elHora().value = hora;
 
     const user = await getUserEmail();
     const entry = {
@@ -173,17 +203,13 @@ export function initLibroMemorandum({ sb }) {
   }
 
   async function onImportarDesdeGuardia() {
-    const log = appState?.guardiaState?.log || [];
+    const log = appState?.guardiaState?.log || appState?.guardia?.log || [];
     if (!Array.isArray(log) || !log.length) {
       alert("No hay acciones registradas en Guardia para importar.");
       return;
     }
 
-    // evitamos duplicar por (ts + accion + patrulla)
-    const existingKeys = new Set(
-      (state.entries || []).map((e) => String(e?.from_guardia_key || ""))
-    );
-
+    const existingKeys = new Set((state.entries || []).map((e) => String(e?.from_guardia_key || "")));
     const user = await getUserEmail();
 
     const nuevos = [];
@@ -197,7 +223,7 @@ export function initLibroMemorandum({ sb }) {
         ts: nowIso(),
         user,
         causa: String(x.accion),
-        hora: String(x.hora),
+        hora: String(x.hora), // mantiene la hora real del evento guardia
         novedad: `${String(x.patrulla)} — ${String(x.resumen || "").trim()}`,
         from_guardia_key: key,
       });
@@ -225,10 +251,21 @@ export function initLibroMemorandum({ sb }) {
       if (a) a.addEventListener("click", onAgregar);
       if (l) l.addEventListener("click", onLimpiar);
       if (i) i.addEventListener("click", () => onImportarDesdeGuardia().catch(console.error));
+
+      // ✅ seteo inicial de hora
+      setHoraAuto();
+      lockHoraReadonly();
+
+      // ✅ si el usuario vuelve al tab o hace focus en novedad, actualizamos hora visible
+      const n = elNovedad();
+      if (n) n.addEventListener("focus", () => setHoraAuto());
     },
     async init() {
       await loadFromServer();
       render();
+
+      // ✅ al cargar, muestra hora actual
+      setHoraAuto();
     },
   };
 }
