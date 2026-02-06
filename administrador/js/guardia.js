@@ -31,321 +31,203 @@ function normalizeKey(s) {
     .replace(/[íìïî]/g, "i")
     .replace(/[óòöô]/g, "o")
     .replace(/[úùüû]/g, "u")
-    .replace(/ñ/g, "n")
-    .replace(/[^a-z0-9]+/g, "");
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }
 
-function canonSubgrupo(raw) {
+function getSubgrupoLabel(meta) {
+  const raw = meta?.subgrupo || meta?.subGroup || meta?.grupo || meta?.group || "";
   const k = normalizeKey(raw);
-  if (!k) return "SinSubgrupo";
-
-  if (k === "pda" || k === "pdas") return "PDAs";
-  if (k === "alometro" || k === "alometros") return "Alometros";
-  if (k === "alcoholimetro" || k === "alcoholimetros") return "Alcoholimetros";
-  if (k === "impresora" || k === "impresoras") return "Impresoras";
-  if (k === "ht" || k === "handy" || k === "handytalkie" || k === "handywalkie") return "Ht";
-  if (k === "escopeta" || k === "escopetas") return "Escopetas";
-  if (k === "cartucho" || k === "cartuchos") return "Cartuchos";
-
   if (SUBGRUPO_KEY_TO_LABEL.has(k)) return SUBGRUPO_KEY_TO_LABEL.get(k);
-
-  const cleaned = String(raw || "").trim();
-  return cleaned || "SinSubgrupo";
+  return raw ? String(raw).trim() : "";
 }
 
-function isSubgrupo(item, labelCanon) {
-  const sg = canonSubgrupo(item?.meta?.subgrupo);
-  return sg === labelCanon;
-}
-
-function lugaresDesdeOrdenes() {
-  if (typeof StorageApp === "undefined" || !StorageApp.cargarOrdenes) return [];
-  const ordenes = StorageApp.cargarOrdenes();
-  const set = new Set();
-
-  (ordenes || []).forEach((o) => {
-    (o?.franjas || []).forEach((f) => {
-      const lug = normalizarLugar(f?.lugar);
-      if (lug) set.add(lug);
-    });
+function groupElementosBySubgrupo(elementoValues = []) {
+  // agrupa por subgrupo canonical
+  const map = new Map();
+  elementoValues.forEach((val) => {
+    const meta = invActivos("elemento").find((x) => x.value === val)?.meta || {};
+    const label = getSubgrupoLabel(meta) || "Otros";
+    if (!map.has(label)) map.set(label, []);
+    map.get(label).push(val);
   });
 
-  return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
-}
-
-function fillLugarSelect(selectEl) {
-  if (!selectEl) return;
-  const lugares = lugaresDesdeOrdenes();
-  const actual = selectEl.value || "";
-  selectEl.innerHTML = `<option value="">Seleccionar lugar</option>`;
-  lugares.forEach((l) => {
-    const opt = document.createElement("option");
-    opt.value = l;
-    opt.textContent = l;
-    selectEl.appendChild(opt);
+  // orden por SUBGRUPOS_ORDEN (lo que no está, al final)
+  const keys = Array.from(map.keys());
+  keys.sort((a, b) => {
+    const ia = SUBGRUPOS_ORDEN.indexOf(a);
+    const ib = SUBGRUPOS_ORDEN.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
   });
-  if (actual && lugares.includes(actual)) selectEl.value = actual;
-}
-
-export function cargarLugaresParaGuardia({ p1Lugar, p2Lugar } = {}) {
-  fillLugarSelect(p1Lugar);
-  fillLugarSelect(p2Lugar);
-}
-
-function chipsCheckbox(container, items, { prefix }) {
-  if (!container) return;
-  if (!items.length) {
-    container.innerHTML = `<div class="muted">Sin datos.</div>`;
-    return;
-  }
-
-  container.innerHTML = items
-    .map((it, idx) => {
-      const id = `${prefix}_${idx}`;
-      return `
-        <label class="checkbox-container" style="display:flex; align-items:center; gap:8px; border:1px solid #ddd; padding:6px 10px; border-radius:999px;">
-          <input type="checkbox" id="${esc(id)}" value="${esc(it.value)}">
-          <span>${esc(it.label)}</span>
-        </label>
-      `;
-    })
-    .join("");
-}
-
-function renderMoviles(container, moviles, { prefix }) {
-  if (!container) return;
-  if (!moviles.length) {
-    container.innerHTML = `<div class="muted">Sin móviles activos.</div>`;
-    return;
-  }
-
-  container.innerHTML = moviles
-    .map((m, idx) => {
-      const baseId = `${prefix}_mov_${idx}`;
-      return `
-        <div style="display:flex; align-items:center; gap:10px; border:1px solid #ddd; border-radius:12px; padding:8px 10px; margin:6px 0; background:#fff;">
-          <label style="display:flex; align-items:center; gap:8px; min-width:180px;">
-            <input type="checkbox" data-movil-pick="1" data-movil-id="${esc(m.value)}" id="${esc(baseId)}">
-            <span style="font-weight:700;">${esc(m.label)}</span>
-          </label>
-
-          <label class="muted" style="display:flex; align-items:center; gap:6px;">
-            <input type="checkbox" data-movil-flag="libro" data-movil-id="${esc(m.value)}" disabled>
-            libro
-          </label>
-
-          <label class="muted" style="display:flex; align-items:center; gap:6px;">
-            <input type="checkbox" data-movil-flag="llave" data-movil-id="${esc(m.value)}" disabled>
-            llave
-          </label>
-
-          <label class="muted" style="display:flex; align-items:center; gap:6px;">
-            <input type="checkbox" data-movil-flag="tvf" data-movil-id="${esc(m.value)}" disabled>
-            tvf
-          </label>
-        </div>
-      `;
-    })
-    .join("");
-
-  container.querySelectorAll('input[data-movil-pick="1"]').forEach((chk) => {
-    chk.addEventListener("change", () => {
-      const movilId = chk.getAttribute("data-movil-id");
-      const enabled = chk.checked;
-      const flags = container.querySelectorAll(
-        `input[data-movil-flag][data-movil-id="${CSS.escape(movilId)}"]`
-      );
-      flags.forEach((f) => {
-        f.disabled = !enabled;
-        if (!enabled) f.checked = false;
-      });
-    });
-  });
-}
-
-function groupElementos(elementosActivos) {
-  const groups = new Map();
-
-  (elementosActivos || []).forEach((e) => {
-    const sgCanon = canonSubgrupo(e?.meta?.subgrupo);
-    if (!groups.has(sgCanon)) groups.set(sgCanon, []);
-    groups.get(sgCanon).push(e);
-  });
-
-  for (const [k, arr] of groups.entries()) {
-    arr.sort((a, b) => (a.orden - b.orden) || String(a.label).localeCompare(String(b.label), "es"));
-    groups.set(k, arr);
-  }
 
   const ordered = [];
-  SUBGRUPOS_ORDEN.forEach((sg) => {
-    if (groups.has(sg)) ordered.push([sg, groups.get(sg)]);
-  });
-
-  Array.from(groups.keys())
-    .filter((k) => !SUBGRUPOS_ORDEN.includes(k))
-    .sort((a, b) => a.localeCompare(b, "es"))
-    .forEach((k) => ordered.push([k, groups.get(k)]));
-
+  keys.forEach((k) => ordered.push([k, map.get(k)]));
   return ordered;
-}
-
-function renderElementos(container, elementosActivos, { prefix }) {
-  if (!container) return;
-  if (!elementosActivos.length) {
-    container.innerHTML = `<div class="muted">Sin elementos activos.</div>`;
-    return;
-  }
-
-  const grouped = groupElementos(elementosActivos);
-
-  container.innerHTML = grouped
-    .map(([sg, items]) => {
-      const listId = `${prefix}_sg_${slugifyValue(sg)}`;
-      return `
-        <div style="border:1px solid #e5e5e5; border-radius:14px; padding:10px; margin:10px 0; background:#fff;">
-          <div style="font-weight:800; margin-bottom:8px;">${esc(sg)}</div>
-          <div id="${esc(listId)}" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
-        </div>
-      `;
-    })
-    .join("");
-
-  grouped.forEach(([sg, items]) => {
-    const listId = `${prefix}_sg_${slugifyValue(sg)}`;
-    const holder = container.querySelector(`#${CSS.escape(listId)}`);
-    if (!holder) return;
-    chipsCheckbox(holder, items, { prefix: `${listId}_it` });
-  });
-}
-
-function renderCartuchos(container, cartuchosItems, { prefix }) {
-  if (!container) return;
-  if (!cartuchosItems.length) {
-    container.innerHTML = `<div class="muted">Sin cartuchos en inventario.</div>`;
-    return;
-  }
-
-  container.innerHTML = cartuchosItems
-    .map((c, idx) => {
-      const id = `${prefix}_car_${idx}`;
-      const tipo = String(c?.meta?.cartucho_tipo || "").toUpperCase();
-      return `
-        <div style="display:flex; align-items:center; gap:10px; border:1px solid #ddd; border-radius:12px; padding:8px 10px; margin:6px 0; background:#fff;">
-          <label style="display:flex; align-items:center; gap:8px; min-width:260px;">
-            <input type="checkbox" data-cartucho-pick="1" data-cartucho-id="${esc(c.value)}" id="${esc(id)}">
-            <span style="font-weight:700;">${esc(c.label)}</span>
-            <span class="muted">${tipo ? "(" + esc(tipo) + ")" : ""}</span>
-          </label>
-
-          <div style="width:140px;">
-            <input type="number" min="0" step="1" class="full"
-              data-cartucho-qty="1" data-cartucho-id="${esc(c.value)}" disabled
-              placeholder="cantidad">
-          </div>
-        </div>
-      `;
-    })
-    .join("");
-
-  container.querySelectorAll('input[data-cartucho-pick="1"]').forEach((chk) => {
-    chk.addEventListener("change", () => {
-      const id = chk.getAttribute("data-cartucho-id");
-      const qty = container.querySelector(
-        `input[data-cartucho-qty="1"][data-cartucho-id="${CSS.escape(id)}"]`
-      );
-      if (!qty) return;
-      qty.disabled = !chk.checked;
-      if (!chk.checked) qty.value = "";
-    });
-  });
 }
 
 function readCheckedValues(container) {
   if (!container) return [];
-  return Array.from(container.querySelectorAll('input[type="checkbox"]'))
-    .filter((x) => x.checked && x.value)
-    .map((x) => x.value);
+  return Array.from(container.querySelectorAll("input[type=checkbox][data-value]"))
+    .filter((x) => x.checked)
+    .map((x) => x.getAttribute("data-value"))
+    .filter(Boolean);
+}
+
+function renderChips(container, items, checkedValues = []) {
+  if (!container) return;
+  container.innerHTML = "";
+  items.forEach((it) => {
+    const id = `chk_${slugifyValue(it.value)}_${Math.random().toString(16).slice(2)}`;
+    const wrap = document.createElement("label");
+    wrap.className = "chip";
+
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.id = id;
+    chk.setAttribute("data-value", it.value);
+    chk.checked = checkedValues.includes(it.value);
+
+    const span = document.createElement("span");
+    span.textContent = it.label;
+
+    wrap.appendChild(chk);
+    wrap.appendChild(span);
+    container.appendChild(wrap);
+  });
+}
+
+function renderMoviles(container, items, selected = []) {
+  if (!container) return;
+  container.innerHTML = "";
+
+  // un móvil seleccionado = { movil_id, obs }
+  const selectedIds = new Set(selected.map((x) => x.movil_id));
+
+  items.forEach((it) => {
+    const row = document.createElement("div");
+    row.className = "row-inline";
+
+    const id = `mov_${slugifyValue(it.value)}_${Math.random().toString(16).slice(2)}`;
+
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.id = id;
+    chk.checked = selectedIds.has(it.value);
+    chk.setAttribute("data-value", it.value);
+
+    const label = document.createElement("label");
+    label.setAttribute("for", id);
+    label.textContent = it.label;
+
+    const obs = document.createElement("input");
+    obs.type = "text";
+    obs.placeholder = "Obs (opcional)";
+    obs.className = "mini";
+    const found = selected.find((x) => x.movil_id === it.value);
+    obs.value = found?.obs || "";
+    obs.disabled = !chk.checked;
+
+    chk.addEventListener("change", () => {
+      obs.disabled = !chk.checked;
+      if (!chk.checked) obs.value = "";
+    });
+
+    row.appendChild(chk);
+    row.appendChild(label);
+    row.appendChild(obs);
+
+    container.appendChild(row);
+  });
 }
 
 function readMoviles(container) {
   if (!container) return [];
-
-  const picks = Array.from(container.querySelectorAll('input[data-movil-pick="1"]'));
+  const rows = Array.from(container.querySelectorAll(".row-inline"));
   const out = [];
+  rows.forEach((row) => {
+    const chk = row.querySelector("input[type=checkbox][data-value]");
+    const obs = row.querySelector("input[type=text]");
+    if (chk?.checked) {
+      out.push({ movil_id: chk.getAttribute("data-value"), obs: (obs?.value || "").trim() });
+    }
+  });
+  return out;
+}
 
-  picks.forEach((p) => {
-    if (!p.checked) return;
-    const movil_id = p.getAttribute("data-movil-id");
+function aplicarReglaCartuchos(elementosContainer, cartuchosContainer, precomputedElementosIds = null) {
+  if (!elementosContainer || !cartuchosContainer) return;
 
-    const libro = !!container.querySelector(
-      `input[data-movil-flag="libro"][data-movil-id="${CSS.escape(movil_id)}"]`
-    )?.checked;
-    const llave = !!container.querySelector(
-      `input[data-movil-flag="llave"][data-movil-id="${CSS.escape(movil_id)}"]`
-    )?.checked;
-    const tvf = !!container.querySelector(
-      `input[data-movil-flag="tvf"][data-movil-id="${CSS.escape(movil_id)}"]`
-    )?.checked;
-
-    out.push({ movil_id, libro, llave, tvf });
+  // Si hay escopetas seleccionadas => habilitar cartuchos
+  const elementosIds = precomputedElementosIds || readCheckedValues(elementosContainer);
+  const hayEscopeta = elementosIds.some((id) => {
+    const label = invLabelFromValue("elemento", id).toLowerCase();
+    return label.includes("escopeta");
   });
 
-  return out;
+  cartuchosContainer.style.display = hayEscopeta ? "block" : "none";
+  // si no hay escopeta, desmarcar todo
+  if (!hayEscopeta) {
+    cartuchosContainer.querySelectorAll("input[type=checkbox]").forEach((c) => (c.checked = false));
+  }
+}
+
+function renderCartuchos(container, checkedMap = {}) {
+  if (!container) return;
+  container.innerHTML = "";
+
+  const tipos = [
+    { key: "posta", label: "Posta" },
+    { key: "antitumulto", label: "Antitumulto" },
+    { key: "goma", label: "Goma" },
+  ];
+
+  tipos.forEach((t) => {
+    const id = `cart_${t.key}_${Math.random().toString(16).slice(2)}`;
+    const wrap = document.createElement("label");
+    wrap.className = "chip";
+
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.id = id;
+    chk.setAttribute("data-key", t.key);
+    chk.checked = Boolean(checkedMap?.[t.key]);
+
+    const span = document.createElement("span");
+    span.textContent = t.label;
+
+    wrap.appendChild(chk);
+    wrap.appendChild(span);
+    container.appendChild(wrap);
+  });
 }
 
 function readCartuchos(container) {
   if (!container) return {};
-  const picks = Array.from(container.querySelectorAll('input[data-cartucho-pick="1"]'));
-  const out = {};
-  picks.forEach((p) => {
-    if (!p.checked) return;
-    const id = p.getAttribute("data-cartucho-id");
-    const qtyEl = container.querySelector(
-      `input[data-cartucho-qty="1"][data-cartucho-id="${CSS.escape(id)}"]`
-    );
-    const qty = Number(qtyEl?.value || 0);
-    out[id] = isNaN(qty) ? 0 : qty;
+  const map = {};
+  Array.from(container.querySelectorAll("input[type=checkbox][data-key]")).forEach((c) => {
+    map[c.getAttribute("data-key")] = c.checked;
   });
-  return out;
+  return map;
 }
 
-function patrullaTieneEscopeta(elementos_ids) {
-  const escopetas = invActivos("elemento").filter((e) => isSubgrupo(e, "Escopetas"));
-  const escIds = new Set(escopetas.map((x) => x.value));
-  return (elementos_ids || []).some((id) => escIds.has(id));
-}
-
-function aplicarReglaCartuchos(elContainer, cartContainer, elementos_ids_override) {
-  if (!cartContainer) return;
-
-  const elementos_ids =
-    Array.isArray(elementos_ids_override) ? elementos_ids_override : readCheckedValues(elContainer);
-
-  const hayEscopeta = patrullaTieneEscopeta(elementos_ids);
-
-  cartContainer.querySelectorAll('input[data-cartucho-pick="1"]').forEach((chk) => {
-    chk.disabled = !hayEscopeta;
-    if (!hayEscopeta) chk.checked = false;
-  });
-  cartContainer.querySelectorAll('input[data-cartucho-qty="1"]').forEach((inp) => {
-    inp.disabled = true;
-    if (!hayEscopeta) inp.value = "";
-  });
-
-  if (hayEscopeta) {
-    cartContainer.querySelectorAll('input[data-cartucho-pick="1"]').forEach((chk) => {
-      chk.disabled = false;
-      chk.dispatchEvent(new Event("change"));
-    });
-  }
+function formatLogEntry(e) {
+  const ts = e?.hora || "";
+  const p = e?.patrulla || "";
+  const a = e?.accion || "";
+  const r = e?.resumen || "";
+  return `${ts} ${p} ${a}: ${r}`;
 }
 
 export function initGuardia({ sb, subtabs } = {}) {
-  const guardiaEstadoTxt = document.getElementById("guardiaEstadoTxt");
+  // ===== DOM refs (tolerantes) =====
+  const elEstadoTxt = () => document.getElementById("guardiaEstadoTxt");
+  const elPreview = () => document.getElementById("guardiaJsonPreview");
+
   const btnGuardiaGuardar = document.getElementById("btnGuardiaGuardar");
   const btnGuardiaActualizar = document.getElementById("btnGuardiaActualizar");
-  const preGuardia = document.getElementById("guardiaJsonPreview");
 
   const p1Lugar = document.getElementById("p1Lugar");
   const p1Obs = document.getElementById("p1Obs");
@@ -361,116 +243,111 @@ export function initGuardia({ sb, subtabs } = {}) {
   const p2Elementos = document.getElementById("p2Elementos");
   const p2Cartuchos = document.getElementById("p2Cartuchos");
 
-  let guardiaState = state.guardiaState;
+  let guardiaState = state?.guardia || null;
 
-  function renderGuardiaPreview() {
-    if (preGuardia) preGuardia.textContent = JSON.stringify(guardiaState || {}, null, 2);
-    if (guardiaEstadoTxt) guardiaEstadoTxt.textContent = `Última actualización: ${guardiaState.updated_at_ts || "—"}`;
+  function setEstado(s) {
+    const el = elEstadoTxt();
+    if (el) el.textContent = s || "";
   }
 
-  function aplicarStateAGuardiaUI() {
-    const p1 = guardiaState?.patrullas?.p1 || {};
-    const p2 = guardiaState?.patrullas?.p2 || {};
+  function renderGuardiaPreview() {
+    const pre = elPreview();
+    if (pre) pre.textContent = JSON.stringify(guardiaState || {}, null, 2);
+  }
 
-    if (p1Lugar) p1Lugar.value = p1.lugar || "";
-    if (p1Obs) p1Obs.value = p1.obs || "";
-    if (p2Lugar) p2Lugar.value = p2.lugar || "";
-    if (p2Obs) p2Obs.value = p2.obs || "";
+  function fillSelectOptions(selectEl, opts, currentVal = "") {
+    if (!selectEl) return;
+    const val = currentVal || "";
+    selectEl.innerHTML = `<option value="">Seleccionar</option>` + opts.map((o) => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
+    if (val) selectEl.value = val;
+  }
 
-    (p1Personal?.querySelectorAll('input[type="checkbox"]') || []).forEach((x) => {
-      x.checked = Array.isArray(p1.personal_ids) && p1.personal_ids.includes(x.value);
+  function getLugaresFromOrdenes() {
+    // toma lugares normalizados desde órdenes publicadas (state.ordenes)
+    const out = new Set();
+    const ords = Array.isArray(state?.ordenes) ? state.ordenes : [];
+    ords.forEach((o) => {
+      const franjas = Array.isArray(o?.franjas) ? o.franjas : [];
+      franjas.forEach((f) => {
+        const l = normalizarLugar(f?.lugar || "");
+        if (l) out.add(l);
+      });
     });
-    (p2Personal?.querySelectorAll('input[type="checkbox"]') || []).forEach((x) => {
-      x.checked = Array.isArray(p2.personal_ids) && p2.personal_ids.includes(x.value);
-    });
-
-    function applyMov(container, movArr) {
-      if (!container) return;
-      const byId = new Map((movArr || []).map((m) => [String(m.movil_id), m]));
-      container.querySelectorAll('input[data-movil-pick="1"]').forEach((chk) => {
-        const id = chk.getAttribute("data-movil-id");
-        const m = byId.get(String(id));
-        chk.checked = !!m;
-
-        chk.dispatchEvent(new Event("change"));
-
-        if (m) {
-          const libro = container.querySelector(`input[data-movil-flag="libro"][data-movil-id="${CSS.escape(id)}"]`);
-          const llave = container.querySelector(`input[data-movil-flag="llave"][data-movil-id="${CSS.escape(id)}"]`);
-          const tvf = container.querySelector(`input[data-movil-flag="tvf"][data-movil-id="${CSS.escape(id)}"]`);
-          if (libro) libro.checked = !!m.libro;
-          if (llave) llave.checked = !!m.llave;
-          if (tvf) tvf.checked = !!m.tvf;
-        }
-      });
-    }
-
-    applyMov(p1Moviles, p1.moviles);
-    applyMov(p2Moviles, p2.moviles);
-
-    function applyElems(container, ids) {
-      if (!container) return;
-      container.querySelectorAll('input[type="checkbox"]').forEach((chk) => {
-        if (!chk.value) return;
-        chk.checked = Array.isArray(ids) && ids.includes(chk.value);
-      });
-    }
-
-    applyElems(p1Elementos, p1.elementos_ids);
-    applyElems(p2Elementos, p2.elementos_ids);
-
-    function applyCart(container, map) {
-      if (!container) return;
-      const m = map || {};
-      container.querySelectorAll('input[data-cartucho-pick="1"]').forEach((chk) => {
-        const id = chk.getAttribute("data-cartucho-id");
-        const qtyEl = container.querySelector(`input[data-cartucho-qty="1"][data-cartucho-id="${CSS.escape(id)}"]`);
-        const has = Object.prototype.hasOwnProperty.call(m, id);
-        chk.checked = has;
-        chk.dispatchEvent(new Event("change"));
-        if (qtyEl && has) qtyEl.value = String(m[id] ?? 0);
-      });
-    }
-
-    applyCart(p1Cartuchos, p1.cartuchos_map);
-    applyCart(p2Cartuchos, p2.cartuchos_map);
-
-    aplicarReglaCartuchos(p1Elementos, p1Cartuchos, p1.elementos_ids);
-    aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2.elementos_ids);
-
-    renderGuardiaPreview();
-
-    if (subtabs) {
-      subtabs.boot();
-      subtabs.apply();
-    }
+    return Array.from(out).sort((a, b) => a.localeCompare(b));
   }
 
   function renderGuardiaDesdeInventario() {
-    const personal = invActivos("personal");
-    const moviles = invActivos("movil");
-    const elementos = invActivos("elemento");
+    // Lugares (desde órdenes)
+    const lugares = getLugaresFromOrdenes();
+    fillSelectOptions(p1Lugar, lugares, guardiaState?.patrullas?.p1?.lugar || "");
+    fillSelectOptions(p2Lugar, lugares, guardiaState?.patrullas?.p2?.lugar || "");
 
-    chipsCheckbox(p1Personal, personal, { prefix: "p1_per" });
-    chipsCheckbox(p2Personal, personal, { prefix: "p2_per" });
+    // Inventario activo
+    const pers = invActivos("personal");
+    const movs = invActivos("movil");
+    const elems = invActivos("elemento");
 
-    renderMoviles(p1Moviles, moviles, { prefix: "p1" });
-    renderMoviles(p2Moviles, moviles, { prefix: "p2" });
+    // Estado actual
+    const p1 = guardiaState?.patrullas?.p1 || {};
+    const p2 = guardiaState?.patrullas?.p2 || {};
 
-    const elementosNoCart = elementos.filter((e) => !isSubgrupo(e, "Cartuchos"));
-    renderElementos(p1Elementos, elementosNoCart, { prefix: "p1_el" });
-    renderElementos(p2Elementos, elementosNoCart, { prefix: "p2_el" });
+    renderChips(p1Personal, pers, p1.personal_ids || []);
+    renderChips(p2Personal, pers, p2.personal_ids || []);
 
-    const cartuchos = elementos.filter((e) => isSubgrupo(e, "Cartuchos"));
-    renderCartuchos(p1Cartuchos, cartuchos, { prefix: "p1" });
-    renderCartuchos(p2Cartuchos, cartuchos, { prefix: "p2" });
+    renderMoviles(p1Moviles, movs, p1.moviles || []);
+    renderMoviles(p2Moviles, movs, p2.moviles || []);
 
-    aplicarStateAGuardiaUI();
+    // Elementos con agrupación y orden fijo
+    const p1Elems = p1.elementos_ids || [];
+    const p2Elems = p2.elementos_ids || [];
 
-    if (subtabs) {
-      subtabs.boot();
-      subtabs.apply();
-    }
+    const groups1 = groupElementosBySubgrupo(elems.map((x) => x.value));
+    const groups2 = groups1; // mismo orden
+
+    // Render elementos como chips en un bloque por subgrupo
+    const renderElementosGrouped = (container, checked, groups) => {
+      if (!container) return;
+      container.innerHTML = "";
+      groups.forEach(([label, vals]) => {
+        const h = document.createElement("div");
+        h.className = "subhead";
+        h.textContent = label;
+        container.appendChild(h);
+
+        const row = document.createElement("div");
+        row.className = "chip-grid";
+
+        const items = vals.map((v) => {
+          const it = elems.find((x) => x.value === v);
+          return it || { label: v, value: v };
+        });
+        renderChips(row, items, checked);
+        container.appendChild(row);
+      });
+    };
+
+    renderElementosGrouped(p1Elementos, p1Elems, groups1);
+    renderElementosGrouped(p2Elementos, p2Elems, groups2);
+
+    // Cartuchos (visible si hay escopeta)
+    renderCartuchos(p1Cartuchos, p1.cartuchos_map || {});
+    renderCartuchos(p2Cartuchos, p2.cartuchos_map || {});
+
+    aplicarReglaCartuchos(p1Elementos, p1Cartuchos, p1Elems);
+    aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2Elems);
+
+    // Obs
+    if (p1Obs) p1Obs.value = p1.obs || "";
+    if (p2Obs) p2Obs.value = p2.obs || "";
+  }
+
+  function aplicarStateAGuardiaUI() {
+    guardiaState = state?.guardia || guardiaState || null;
+    renderGuardiaDesdeInventario();
+    renderGuardiaPreview();
+
+    const logLen = Array.isArray(guardiaState?.log) ? guardiaState.log.length : 0;
+    setEstado(logLen ? `OK · Logs: ${logLen}` : "OK");
   }
 
   function buildStateFromUI() {
@@ -499,6 +376,7 @@ export function initGuardia({ sb, subtabs } = {}) {
 
     next.patrullas.p1.lugar = normalizarLugar(p1Lugar?.value || "");
     next.patrullas.p1.obs = (p1Obs?.value || "").trim();
+    next.patrullas.p1.personal_ids = undefined;
     next.patrullas.p1.personal_ids = p1PersonalIds;
     next.patrullas.p1.moviles = p1Mov;
     next.patrullas.p1.elementos_ids = p1Elem;
@@ -516,69 +394,66 @@ export function initGuardia({ sb, subtabs } = {}) {
 
   async function cargarGuardiaDesdeServidor() {
     const session = await getSessionOrNull(sb);
-    const headers = {
-      apikey: SUPABASE_ANON_KEY,
-      Accept: "application/json",
-    };
-    if (session?.access_token) headers.Authorization = "Bearer " + session.access_token;
+    if (!session) return null;
 
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/guardia_estado?select=payload&id=eq.1&limit=1`, { headers });
+    const url = `${SUPABASE_URL}/rest/v1/guardia_estado?id=eq.1&select=payload`;
+    const resp = await fetch(url, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: "Bearer " + session.access_token,
+        Accept: "application/json",
+      },
+    });
 
-    if (!r.ok) {
-      const txt = await r.text();
-      console.warn("[ADMIN] No se pudo leer guardia_estado:", r.status, txt);
-      renderGuardiaPreview();
-      return;
-    }
-
-    const data = await r.json();
-    const payload = data?.[0]?.payload || null;
-
-    if (payload && typeof payload === "object") {
-      setGuardiaState(payload);
-      guardiaState = state.guardiaState;
-    }
-
-    aplicarStateAGuardiaUI();
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const payload = data?.[0]?.payload;
+    return payload && typeof payload === "object" ? payload : null;
   }
 
   async function guardarGuardiaEnServidor(nextPayload) {
     const session = await getSessionOrNull(sb);
     if (!session) {
-      alert("No hay sesión iniciada. Inicie sesión antes de guardar Guardia.");
+      alert("No hay sesión activa. Volvé a iniciar sesión.");
       return false;
     }
 
     const res = await patchOrInsertStore({ table: "guardia_estado", payload: nextPayload, session });
     if (!res.ok) {
       console.error("[ADMIN] Error guardando guardia_estado:", res.status, res.text);
-      alert("Error guardando Guardia. Mirá Console (F12). Status: " + res.status);
+      alert("Error guardando Guardia. Mirá Console (F12).");
       return false;
     }
 
-    const p = res.data?.[0]?.payload ?? res.data?.payload ?? null;
-    setGuardiaState(p && typeof p === "object" ? p : nextPayload);
-    guardiaState = state.guardiaState;
-
+    setGuardiaState(nextPayload);
+    guardiaState = nextPayload;
     renderGuardiaPreview();
     return true;
   }
 
   async function onGuardarGuardia() {
     const next = buildStateFromUI();
-    const ok = await guardarGuardiaEnServidor(next);
-    if (ok) alert("Guardia guardada (defaults publicados).");
+    await guardarGuardiaEnServidor(next);
+    aplicarStateAGuardiaUI();
   }
 
   async function onActualizarGuardia({ invLoad } = {}) {
-    if (typeof invLoad === "function") await invLoad();
-    cargarLugaresParaGuardia({ p1Lugar, p2Lugar });
-    await cargarGuardiaDesdeServidor();
-
-    if (subtabs) {
-      subtabs.boot();
-      subtabs.apply();
+    const payload = await cargarGuardiaDesdeServidor();
+    if (payload) setGuardiaState(payload);
+    guardiaState = state?.guardia || payload || guardiaState;
+    renderGuardiaDesdeInventario();
+    renderGuardiaPreview();
+    setEstado(payload ? "Actualizado" : "Sin datos");
+    // si el entrypoint manda invLoad, guardia puede rehidratar inventario si corresponde
+    if (typeof invLoad === "function") {
+      try {
+        await invLoad();
+      } catch {}
     }
+  }
+
+  function refreshLugares() {
+    renderGuardiaDesdeInventario();
   }
 
   function bindAccionesEstado() {
@@ -605,7 +480,22 @@ export function initGuardia({ sb, subtabs } = {}) {
         const resumen = `Personal: ${perTxt || "-"} | Movil(es): ${movTxt || "-"} | Elementos: ${elemTxt || "-"}`;
 
         next.log = Array.isArray(next.log) ? next.log : [];
-        next.log.unshift({ patrulla: String(p).toUpperCase(), accion, hora, ts, resumen });
+        next.log.unshift({
+          patrulla: String(p).toUpperCase(),
+          accion,
+          hora,
+          ts,
+          resumen,
+          // snapshot estructurado para importación a Libro Memorándum
+          snapshot: {
+            lugar: pat.lugar || "",
+            obs: pat.obs || "",
+            personal_ids: Array.isArray(pat.personal_ids) ? [...pat.personal_ids] : [],
+            moviles: Array.isArray(pat.moviles) ? cloneDeep(pat.moviles) : [],
+            elementos_ids: Array.isArray(pat.elementos_ids) ? [...pat.elementos_ids] : [],
+            cartuchos_map: pat.cartuchos_map ? cloneDeep(pat.cartuchos_map) : {},
+          },
+        });
 
         await guardarGuardiaEnServidor(next);
         aplicarStateAGuardiaUI();
@@ -633,29 +523,23 @@ export function initGuardia({ sb, subtabs } = {}) {
 
     // Re-render UI cuando cambia inventario
     subscribeInventario(() => {
-      // mantiene lugares y re-render de chips
       renderGuardiaDesdeInventario();
       renderGuardiaPreview();
     });
   }
 
   async function init({ invLoad } = {}) {
-    cargarLugaresParaGuardia({ p1Lugar, p2Lugar });
+    // Subtabs (si están presentes)
+    try {
+      if (subtabs?.boot) subtabs.boot();
+    } catch {}
+
+    // cargar guardia y pintar UI
+    await onActualizarGuardia({ invLoad });
     renderGuardiaDesdeInventario();
-    await cargarGuardiaDesdeServidor();
     renderGuardiaPreview();
-
-    // Parchar handler de actualizar para que use invLoad real
-    if (btnGuardiaActualizar) {
-      btnGuardiaActualizar.onclick = null;
-      btnGuardiaActualizar.addEventListener("click", () => onActualizarGuardia({ invLoad }).catch(console.error));
-    }
-
-    if (subtabs) {
-      subtabs.boot();
-      subtabs.apply();
-    }
+    setEstado("OK");
   }
 
-  return { bind, init, cargarLugaresParaGuardia: () => cargarLugaresParaGuardia({ p1Lugar, p2Lugar }), cargarGuardiaDesdeServidor };
+  return { bind, init, refreshLugares };
 }
