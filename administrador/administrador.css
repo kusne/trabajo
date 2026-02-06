@@ -96,11 +96,19 @@ textarea{
   flex-wrap: wrap;
 }
 
+/* ✅ Cambio 1: btn-primary con look consistente + disabled */
 .btn-primary{
   padding:10px 14px;
   border-radius:12px;
   border:0;
   cursor:pointer;
+  background: rgba(15, 23, 42, .92);
+  color: #fff;
+}
+
+.btn-primary:disabled{
+  opacity: .55;
+  cursor:not-allowed;
 }
 
 .btn-ghost{
@@ -140,12 +148,14 @@ textarea{
   background: rgba(255,255,255,.6);
 }
 
+/* ✅ Cambio 3: json-preview con max-height para móvil */
 .json-preview{
   background:#0f172a;
   color:#e5e7eb;
   padding:14px;
   border-radius:14px;
   overflow:auto;
+  max-height: 320px;
 }
 
 /* ===== Libro memorándum ===== */
@@ -227,6 +237,11 @@ textarea{
 
 .table td .muted{
   margin: 0;
+}
+
+/* ✅ Cambio 2: cuando el <td> tiene class="muted" (no un <div> adentro) */
+.table td.muted{
+  opacity: .7;
 }
 
 .table .btn-danger{
