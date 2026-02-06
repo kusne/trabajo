@@ -162,7 +162,7 @@ export function initLibroMemorandum({ sb }) {
     // input type="time" no soporta readonly real en todos los navegadores,
     // así que lo mejor es disabled=false y "pisa" al agregar.
     // Si querés bloquear sí o sí: descomentá esto:
-    // h.disabled = true;
+    h.disabled = true;
   }
 
   async function onAgregar() {
