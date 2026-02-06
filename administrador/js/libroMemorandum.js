@@ -7,11 +7,11 @@ const ROW_ID = 1;
 
 export function initLibroMemorandum({ sb }) {
   // ===== DOM getters (no rompen si el tab no existe) =====
-  const elCausa = () => document.getElementById("memoCausa");
-  const elHora = () => document.getElementById("memoHora");
-  const elNovedad = () => document.getElementById("memoNovedad");
+  const elCausa = () => document.getElementById("libroCausa");
+  const elHora = () => document.getElementById("libroHora");
+  const elNovedad = () => document.getElementById("libroNovedad");
+  const tbody = () => document.getElementById("libroTbody");
 
-  const tbody = () => document.getElementById("memoTbody");
   const elPreview = () => document.getElementById("libroJsonPreview");
 
   const btnAgregar = () => document.getElementById("btnLibroAgregar");
