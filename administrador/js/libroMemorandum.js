@@ -1,57 +1,27 @@
 // administrador/js/libroMemorandum.js
-// Guarda un JSON único (id=1) en Supabase, similar a guardia_store.
-// Tabla sugerida: libro_memorandum_store (id int PK, payload jsonb, updated_at timestamptz)
+// Guarda un JSON único (id=1) en Supabase.
+// Tabla: public.libro_memorandum_store (id int PK, payload jsonb, updated_at timestamptz)
 
 const TABLE = "libro_memorandum_store";
 const ROW_ID = 1;
 
 export function initLibroMemorandum({ sb }) {
-  const elTexto = () => document.getElementById("libroTexto");
-  const elLista = () => document.getElementById("libroLista");
+  // ====== DOM (3 columnas) ======
+  const elCausa = () => document.getElementById("memoCausa");     // select
+  const elHora = () => document.getElementById("memoHora");       // input time o text HH:MM
+  const elNovedad = () => document.getElementById("memoNovedad"); // textarea/input
+
+  const elTbody = () => document.getElementById("memoTbody");     // tbody de la tabla/lista
   const elPreview = () => document.getElementById("libroJsonPreview");
+
   const btnAgregar = () => document.getElementById("btnLibroAgregar");
   const btnLimpiar = () => document.getElementById("btnLibroLimpiar");
 
-  let state = { entries: [] };
-
-  function fmt(ts) {
-    try {
-      return new Date(ts).toLocaleString("es-AR");
-    } catch {
-      return ts;
-    }
-  }
-
-  function render() {
-    const list = elLista();
-    const pre = elPreview();
-
-    if (pre) pre.textContent = JSON.stringify(state || {}, null, 2);
-
-    if (!list) return;
-    list.innerHTML = "";
-
-    const entries = Array.isArray(state?.entries) ? state.entries : [];
-    const last = entries.slice(-10).reverse();
-
-    if (!last.length) {
-      list.innerHTML = `<div class="muted">Sin asientos todavía.</div>`;
-      return;
-    }
-
-    last.forEach((e) => {
-      const div = document.createElement("div");
-      div.className = "list-item";
-      div.innerHTML = `
-        <div class="meta">${fmt(e.ts)}${e.user ? " — " + e.user : ""}</div>
-        <div>${escapeHtml(e.text || "")}</div>
-      `;
-      list.appendChild(div);
-    });
-  }
+  // payload único: { items: [ {id, causa, hora, novedad, ts, user} ] }
+  let state = { items: [] };
 
   function escapeHtml(s) {
-    return String(s)
+    return String(s ?? "")
       .replaceAll("&", "&amp;")
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;")
@@ -68,25 +38,77 @@ export function initLibroMemorandum({ sb }) {
     }
   }
 
+  function nowHHMM() {
+    const d = new Date();
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${hh}:${mm}`;
+  }
+
+  function render() {
+    const pre = elPreview();
+    if (pre) pre.textContent = JSON.stringify(state || {}, null, 2);
+
+    const tb = elTbody();
+    if (!tb) return;
+
+    const items = Array.isArray(state?.items) ? state.items : [];
+    if (!items.length) {
+      tb.innerHTML = `<tr><td colspan="4" class="muted">Sin asientos todavía.</td></tr>`;
+      return;
+    }
+
+    // Últimos arriba
+    const rows = items.slice().reverse();
+
+    tb.innerHTML = rows
+      .map((it) => {
+        const id = escapeHtml(it.id);
+        const causa = escapeHtml(it.causa);
+        const hora = escapeHtml(it.hora);
+        const nov = escapeHtml(it.novedad);
+
+        return `
+          <tr data-id="${id}">
+            <td>${causa}</td>
+            <td>${hora}</td>
+            <td>${nov}</td>
+            <td style="white-space:nowrap;">
+              <button type="button" class="btn-danger btnMemoDel" data-id="${id}">Eliminar</button>
+            </td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    // bind eliminar
+    tb.querySelectorAll(".btnMemoDel").forEach((b) => {
+      b.addEventListener("click", async () => {
+        const id = b.getAttribute("data-id");
+        if (!id) return;
+        const ok = confirm("¿Eliminar este asiento del Libro Memorandum?");
+        if (!ok) return;
+        await eliminarItem(id);
+      });
+    });
+  }
+
   async function loadFromServer() {
-    // Si no existe la tabla, esto va a devolver error; lo mostramos claro.
-    const { data, error } = await sb
-      .from(TABLE)
-      .select("payload")
-      .eq("id", ROW_ID)
-      .limit(1);
+    const { data, error } = await sb.from(TABLE).select("payload").eq("id", ROW_ID).limit(1);
 
     if (error) {
       console.warn("[LIBRO] load error:", error);
-      // No alert automático para no molestar en cada carga.
+      // No alert acá para no molestar al cargar
+      state = { items: [] };
       return;
     }
 
     const payload = data?.[0]?.payload;
     if (payload && typeof payload === "object") {
       state = payload;
+      if (!Array.isArray(state.items)) state.items = [];
     } else {
-      state = { entries: [] };
+      state = { items: [] };
     }
   }
 
@@ -97,50 +119,72 @@ export function initLibroMemorandum({ sb }) {
       updated_at: new Date().toISOString(),
     };
 
-    const { error } = await sb
-      .from(TABLE)
-      .upsert(row, { onConflict: "id" });
+    const { error } = await sb.from(TABLE).upsert(row, { onConflict: "id" });
 
     if (error) {
       console.error("[LIBRO] save error:", error);
       alert(
-        "Error guardando Libro Memorándum. Mirá Console (F12).\n" +
-        "Si dice que la tabla no existe, hay que crear: " + TABLE
+        "Error guardando Libro Memorandum. Mirá Console (F12).\n" +
+          "Si dice que la tabla no existe, hay que crear: " + TABLE
       );
       return false;
     }
-
     return true;
   }
 
+  function validarHHMM(h) {
+    const m = String(h || "").trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+    return !!m;
+  }
+
+  function generarId() {
+    return (crypto?.randomUUID?.() || String(Date.now()));
+  }
+
   async function onAgregar() {
-    const t = elTexto();
-    const text = (t?.value || "").trim();
-    if (!text) return alert("Escribí un asiento primero.");
+    const causa = (elCausa()?.value || "").trim();
+    const hora = (elHora()?.value || "").trim();
+    const novedad = (elNovedad()?.value || "").trim();
+
+    if (!causa) return alert("Seleccioná una causa.");
+    if (!hora) return alert("Ingresá la hora.");
+    if (!validarHHMM(hora)) return alert("Hora inválida. Usá formato HH:MM (ej: 20:15).");
+    if (!novedad) return alert("Escribí la novedad/referencia.");
 
     const user = await getUserEmail();
 
-    const entry = {
+    const item = {
+      id: generarId(),
       ts: new Date().toISOString(),
       user,
-      text,
+      causa,
+      hora,
+      novedad,
     };
 
-    const entries = Array.isArray(state?.entries) ? state.entries : [];
-    state = { ...state, entries: [...entries, entry] };
+    const items = Array.isArray(state?.items) ? state.items : [];
+    state = { ...state, items: [...items, item] };
 
     render();
-
-    // Guardar en servidor (si la tabla existe)
     await saveToServer();
 
-    // limpiar
-    if (t) t.value = "";
+    // limpiar inputs (dejamos hora con “ahora” por comodidad)
+    if (elCausa()) elCausa().value = "";
+    if (elHora()) elHora().value = nowHHMM();
+    if (elNovedad()) elNovedad().value = "";
   }
 
   function onLimpiar() {
-    const t = elTexto();
-    if (t) t.value = "";
+    if (elCausa()) elCausa().value = "";
+    if (elHora()) elHora().value = nowHHMM();
+    if (elNovedad()) elNovedad().value = "";
+  }
+
+  async function eliminarItem(id) {
+    const items = Array.isArray(state?.items) ? state.items : [];
+    state = { ...state, items: items.filter((x) => String(x.id) !== String(id)) };
+    render();
+    await saveToServer();
   }
 
   return {
@@ -149,6 +193,9 @@ export function initLibroMemorandum({ sb }) {
       const l = btnLimpiar();
       if (a) a.addEventListener("click", onAgregar);
       if (l) l.addEventListener("click", onLimpiar);
+
+      // default hora
+      if (elHora() && !elHora().value) elHora().value = nowHHMM();
     },
 
     async init() {
