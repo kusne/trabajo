@@ -221,6 +221,69 @@ function formatLogEntry(e) {
   return `${ts} ${p} ${a}: ${r}`;
 }
 
+/**
+ * ✅ NUEVO: parser de lugares desde el textarea #franjas (Órdenes)
+ * Acepta líneas tipo:
+ * "07 a 11 hs - RN168 km18 - Control vehicular"
+ * y variantes con guiones.
+ */
+function getLugaresFromFranjasTextarea() {
+  const t = document.getElementById("franjas")?.value || "";
+  const out = new Set();
+
+  t.split("\n").forEach((line) => {
+    const s = String(line || "").trim();
+    if (!s) return;
+
+    // Intento 1: separador " - "
+    let parts = s.split(" - ").map((x) => x.trim()).filter(Boolean);
+
+    // Intento 2: si no hay " - ", probamos con "-"
+    if (parts.length < 2) {
+      parts = s.split("-").map((x) => x.trim()).filter(Boolean);
+    }
+
+    if (parts.length < 2) return;
+
+    // Formato: HORARIO - LUGAR - TITULO => lugar en índice 1
+    const lugar = normalizarLugar(parts[1]);
+    if (lugar) out.add(lugar);
+  });
+
+  return Array.from(out).sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * Lugares desde state.ordenes (si existen)
+ */
+function getLugaresFromOrdenes() {
+  const out = new Set();
+  const ords = Array.isArray(state?.ordenes) ? state.ordenes : [];
+  ords.forEach((o) => {
+    const franjas = Array.isArray(o?.franjas) ? o.franjas : [];
+    franjas.forEach((f) => {
+      const l = normalizarLugar(f?.lugar || "");
+      if (l) out.add(l);
+    });
+  });
+  return Array.from(out).sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * ✅ NUEVO: lugares SMART
+ * 1) usa state.ordenes si tiene data
+ * 2) si no, usa #franjas
+ */
+function getLugaresSmart() {
+  const fromState = getLugaresFromOrdenes();
+  if (fromState.length) return fromState;
+
+  const fromFranjas = getLugaresFromFranjasTextarea();
+  if (fromFranjas.length) return fromFranjas;
+
+  return [];
+}
+
 export function initGuardia({ sb, subtabs } = {}) {
   // ===== DOM refs (tolerantes) =====
   const elEstadoTxt = () => document.getElementById("guardiaEstadoTxt");
@@ -258,27 +321,15 @@ export function initGuardia({ sb, subtabs } = {}) {
   function fillSelectOptions(selectEl, opts, currentVal = "") {
     if (!selectEl) return;
     const val = currentVal || "";
-    selectEl.innerHTML = `<option value="">Seleccionar</option>` + opts.map((o) => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
+    selectEl.innerHTML =
+      `<option value="">Seleccionar</option>` +
+      opts.map((o) => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
     if (val) selectEl.value = val;
   }
 
-  function getLugaresFromOrdenes() {
-    // toma lugares normalizados desde órdenes publicadas (state.ordenes)
-    const out = new Set();
-    const ords = Array.isArray(state?.ordenes) ? state.ordenes : [];
-    ords.forEach((o) => {
-      const franjas = Array.isArray(o?.franjas) ? o.franjas : [];
-      franjas.forEach((f) => {
-        const l = normalizarLugar(f?.lugar || "");
-        if (l) out.add(l);
-      });
-    });
-    return Array.from(out).sort((a, b) => a.localeCompare(b));
-  }
-
   function renderGuardiaDesdeInventario() {
-    // Lugares (desde órdenes)
-    const lugares = getLugaresFromOrdenes();
+    // ✅ Lugares SMART (state.ordenes o fallback #franjas)
+    const lugares = getLugaresSmart();
     fillSelectOptions(p1Lugar, lugares, guardiaState?.patrullas?.p1?.lugar || "");
     fillSelectOptions(p2Lugar, lugares, guardiaState?.patrullas?.p2?.lugar || "");
 
@@ -302,9 +353,8 @@ export function initGuardia({ sb, subtabs } = {}) {
     const p2Elems = p2.elementos_ids || [];
 
     const groups1 = groupElementosBySubgrupo(elems.map((x) => x.value));
-    const groups2 = groups1; // mismo orden
+    const groups2 = groups1;
 
-    // Render elementos como chips en un bloque por subgrupo
     const renderElementosGrouped = (container, checked, groups) => {
       if (!container) return;
       container.innerHTML = "";
@@ -376,7 +426,6 @@ export function initGuardia({ sb, subtabs } = {}) {
 
     next.patrullas.p1.lugar = normalizarLugar(p1Lugar?.value || "");
     next.patrullas.p1.obs = (p1Obs?.value || "").trim();
-    next.patrullas.p1.personal_ids = undefined;
     next.patrullas.p1.personal_ids = p1PersonalIds;
     next.patrullas.p1.moviles = p1Mov;
     next.patrullas.p1.elementos_ids = p1Elem;
@@ -444,7 +493,7 @@ export function initGuardia({ sb, subtabs } = {}) {
     renderGuardiaDesdeInventario();
     renderGuardiaPreview();
     setEstado(payload ? "Actualizado" : "Sin datos");
-    // si el entrypoint manda invLoad, guardia puede rehidratar inventario si corresponde
+
     if (typeof invLoad === "function") {
       try {
         await invLoad();
@@ -486,7 +535,6 @@ export function initGuardia({ sb, subtabs } = {}) {
           hora,
           ts,
           resumen,
-          // snapshot estructurado para importación a Libro Memorándum
           snapshot: {
             lugar: pat.lugar || "",
             obs: pat.obs || "",
@@ -512,6 +560,58 @@ export function initGuardia({ sb, subtabs } = {}) {
     hook(p2Elementos, p2Cartuchos);
   }
 
+  /**
+   * ✅ NUEVO: refrescar lugares cuando se GUARDA una orden (botón guardar órdenes)
+   * - Caso 1: botón con onclick="agregarOrden()"
+   * - Caso 2: hook al wrapper global window.agregarOrden (sin romper nada)
+   */
+  function bindRefrescoPorGuardarOrden() {
+    // 1) listener directo al botón (si existe)
+    const btnGuardarOrden =
+      document.querySelector('button[onclick*="agregarOrden"]') ||
+      document.getElementById("btnGuardarOrden") ||
+      null;
+
+    if (btnGuardarOrden) {
+      btnGuardarOrden.addEventListener("click", () => {
+        // esperamos un toque por si el código de órdenes toca el textarea/estado
+        setTimeout(() => {
+          refreshLugares();
+          renderGuardiaPreview();
+          setEstado("Lugares actualizados (guardar orden)");
+        }, 50);
+      });
+    }
+
+    // 2) hook al global agregarOrden (si existe y no está hookeado)
+    if (typeof window !== "undefined" && typeof window.agregarOrden === "function") {
+      if (!window.__guardia_hook_agregarOrden) {
+        window.__guardia_hook_agregarOrden = true;
+
+        const original = window.agregarOrden;
+        window.agregarOrden = function (...args) {
+          const ret = original.apply(this, args);
+
+          setTimeout(() => {
+            refreshLugares();
+            renderGuardiaPreview();
+            setEstado("Lugares actualizados (guardar orden)");
+          }, 50);
+
+          return ret;
+        };
+      }
+    }
+
+    // 3) si el usuario edita franjas, también refrescamos
+    const franjasEl = document.getElementById("franjas");
+    if (franjasEl) {
+      franjasEl.addEventListener("input", () => {
+        refreshLugares();
+      });
+    }
+  }
+
   function bind() {
     if (btnGuardiaGuardar) btnGuardiaGuardar.addEventListener("click", () => onGuardarGuardia().catch(console.error));
     if (btnGuardiaActualizar) {
@@ -520,6 +620,9 @@ export function initGuardia({ sb, subtabs } = {}) {
 
     bindAccionesEstado();
     bindReglaCartuchosLive();
+
+    // ✅ Nuevo: refresco automático al guardar una orden
+    bindRefrescoPorGuardarOrden();
 
     // Re-render UI cuando cambia inventario
     subscribeInventario(() => {
