@@ -1,9 +1,10 @@
+// administrador/js/ordenes.js
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./config.js";
 import { normalizarOrdenParaPublicar, isoNow } from "./utils.js";
 import { getSessionOrNull } from "./supabaseClient.js";
 
 export function initOrdenes({ sb, onOrdenesChanged } = {}) {
-  // ===== ADM ELEMENTS (ÓRDENES) =====
+  // ===== DOM (ÓRDENES) =====
   const chkFinalizar = document.getElementById("aFinalizarCheckbox");
   const fechaCaducidadInput = document.getElementById("fechaCaducidad");
   const numOrdenEl = document.getElementById("numOrden");
@@ -12,6 +13,7 @@ export function initOrdenes({ sb, onOrdenesChanged } = {}) {
   const fechaVigenciaEl = document.getElementById("fechaVigencia");
   const selectOrdenExistente = document.getElementById("ordenExistente");
   const btnPublicar = document.getElementById("btnPublicarOrdenes");
+  const btnEliminarOrden = document.getElementById("btnEliminarOrden");
 
   let cambiosId = 0;
   let ultimoPublicadoId = 0;
@@ -221,9 +223,10 @@ export function initOrdenes({ sb, onOrdenesChanged } = {}) {
   }
 
   function bind() {
-    // puente global
+    // puente global (por tu HTML legacy)
     window.__adm_agregarOrden = agregarOrden;
     window.__adm_publicarOrdenes = publicarOrdenes;
+    window.__adm_eliminarOrden = eliminarOrden;
     window.eliminarOrden = eliminarOrden;
 
     // A FINALIZAR
@@ -236,6 +239,7 @@ export function initOrdenes({ sb, onOrdenesChanged } = {}) {
         const v = selectOrdenExistente.value;
         if (v === "") {
           limpiarCampos();
+          if (typeof onOrdenesChanged === "function") onOrdenesChanged();
           return;
         }
 
@@ -261,6 +265,9 @@ export function initOrdenes({ sb, onOrdenesChanged } = {}) {
         if (typeof onOrdenesChanged === "function") onOrdenesChanged();
       });
     }
+
+    if (btnPublicar) btnPublicar.addEventListener("click", publicarOrdenes);
+    if (btnEliminarOrden) btnEliminarOrden.addEventListener("click", eliminarOrden);
   }
 
   function resetPublishState() {
@@ -269,10 +276,18 @@ export function initOrdenes({ sb, onOrdenesChanged } = {}) {
     actualizarEstadoPublicar();
   }
 
+  async function init() {
+    limpiarOrdenesCaducadas();
+    actualizarSelector();
+    resetPublishState();
+  }
+
   return {
     bind,
-    limpiarOrdenesCaducadas,
-    actualizarSelector,
-    resetPublishState,
+    init,
+    // opcional: por si querés llamarlos desde afuera
+    agregarOrden,
+    eliminarOrden,
+    publicarOrdenes,
   };
 }
