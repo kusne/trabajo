@@ -2,7 +2,7 @@
 // auth + tabs + módulos (ordenes/guardia/inventario/libro)
 // Mantiene puentes globales para HTML legacy (onclick).
 
-import { createSbClient } from "./js/supabaseClient.js";
+import { createSbClient } from "../js/supabaseClient.js";
 import { initAuth } from "./js/auth.js";
 import { initTabs } from "./js/tabs.js";
 import { initOrdenes } from "./js/ordenes.js";
