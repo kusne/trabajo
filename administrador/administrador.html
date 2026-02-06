@@ -105,12 +105,43 @@
         <pre id="guardiaJsonPreview" class="json-preview">{}</pre>
       </section>
 
-      <!-- TAB: INVENTARIO -->
       <section id="tab-inventario" class="tab-panel">
         <h2>Inventario</h2>
-        <p class="muted">Inventario (móviles, motos, elementos). (Tu módulo actual queda intacto.)</p>
-        <div id="inventarioRoot"></div>
+        <p class="muted">Altas/edición/activación de Personal, Móviles y Elementos.</p>
+
+        <div id="invEstado" class="state">—</div>
+
+        <label>Tipo</label>
+        <select id="invTipo">
+          <option value="personal">personal</option>
+          <option value="movil">movil</option>
+          <option value="elemento">elemento</option>
+        </select>
+
+        <label>Label</label>
+        <input id="invLabel" type="text" placeholder="Ej: Suboficial Pintos" />
+
+        <label>Value (opcional)</label>
+        <input id="invValue" type="text" placeholder="auto si está vacío" />
+
+        <label>Orden</label>
+        <input id="invOrden" type="number" value="0" />
+
+        <label>Subgrupo (solo elemento)</label>
+        <input id="invSubgrupo" type="text" placeholder="Ej: Alcoholimetros / HT / Escopetas..." />
+
+        <label>Meta extra (JSON opcional)</label>
+        <textarea id="invMetaExtra" rows="3" placeholder='{"cartucho_tipo":"posta"}'></textarea>
+
+        <div class="row">
+          <button type="button" id="btnInvAgregar" class="btn-primary">Agregar</button>
+          <button type="button" id="btnInvRefrescar" class="btn-ghost">Refrescar</button>
+        </div>
+
+        <h3>Ítems</h3>
+        <div id="invLista"></div>
       </section>
+
 
       <!-- TAB: LIBRO MEMORÁNDUM (3 columnas) -->
       <section id="tab-libro" class="tab-panel">
@@ -191,4 +222,5 @@
   </div>
 </body>
 </html>
+
 
