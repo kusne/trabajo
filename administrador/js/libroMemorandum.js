@@ -1,24 +1,27 @@
 // administrador/js/libroMemorandum.js
-// Guarda un JSON único (id=1) en Supabase.
 // Tabla: public.libro_memorandum_store (id int PK, payload jsonb, updated_at timestamptz)
+// Guarda un único JSON (id=1) similar a guardia.
 
 const TABLE = "libro_memorandum_store";
 const ROW_ID = 1;
 
 export function initLibroMemorandum({ sb }) {
-  // ====== DOM (3 columnas) ======
-  const elCausa = () => document.getElementById("memoCausa");     // select
-  const elHora = () => document.getElementById("memoHora");       // input time o text HH:MM
-  const elNovedad = () => document.getElementById("memoNovedad"); // textarea/input
+  // ===== DOM getters (NO rompen si el tab no existe) =====
+  const elCausa = () => document.getElementById("libroCausa");
+  const elHora = () => document.getElementById("libroHora");
+  const elNovedad = () => document.getElementById("libroNovedad");
 
-  const elTbody = () => document.getElementById("memoTbody");     // tbody de la tabla/lista
+  const tbody = () => document.getElementById("libroTbody");
   const elPreview = () => document.getElementById("libroJsonPreview");
 
   const btnAgregar = () => document.getElementById("btnLibroAgregar");
   const btnLimpiar = () => document.getElementById("btnLibroLimpiar");
 
-  // payload único: { items: [ {id, causa, hora, novedad, ts, user} ] }
-  let state = { items: [] };
+  let state = { entries: [] };
+
+  function nowIso() {
+    return new Date().toISOString();
+  }
 
   function escapeHtml(s) {
     return String(s ?? "")
@@ -38,85 +41,99 @@ export function initLibroMemorandum({ sb }) {
     }
   }
 
-  function nowHHMM() {
-    const d = new Date();
-    const hh = String(d.getHours()).padStart(2, "0");
-    const mm = String(d.getMinutes()).padStart(2, "0");
-    return `${hh}:${mm}`;
+  function setPreview() {
+    const pre = elPreview();
+    if (pre) pre.textContent = JSON.stringify(state || {}, null, 2);
   }
 
   function render() {
-    const pre = elPreview();
-    if (pre) pre.textContent = JSON.stringify(state || {}, null, 2);
+    setPreview();
 
-    const tb = elTbody();
+    const tb = tbody();
     if (!tb) return;
 
-    const items = Array.isArray(state?.items) ? state.items : [];
-    if (!items.length) {
-      tb.innerHTML = `<tr><td colspan="4" class="muted">Sin asientos todavía.</td></tr>`;
+    tb.innerHTML = "";
+
+    const entries = Array.isArray(state?.entries) ? state.entries : [];
+    if (!entries.length) {
+      tb.innerHTML = `
+        <tr>
+          <td colspan="4" class="muted">Sin asientos todavía.</td>
+        </tr>`;
       return;
     }
 
-    // Últimos arriba
-    const rows = items.slice().reverse();
+    // mostrar últimos primero
+    const rows = [...entries].reverse();
 
-    tb.innerHTML = rows
-      .map((it) => {
-        const id = escapeHtml(it.id);
-        const causa = escapeHtml(it.causa);
-        const hora = escapeHtml(it.hora);
-        const nov = escapeHtml(it.novedad);
+    rows.forEach((e) => {
+      const tr = document.createElement("tr");
 
-        return `
-          <tr data-id="${id}">
-            <td>${causa}</td>
-            <td>${hora}</td>
-            <td>${nov}</td>
-            <td style="white-space:nowrap;">
-              <button type="button" class="btn-danger btnMemoDel" data-id="${id}">Eliminar</button>
-            </td>
-          </tr>
-        `;
-      })
-      .join("");
+      const causa = escapeHtml(e?.causa || "");
+      const hora = escapeHtml(e?.hora || "");
+      const novedad = escapeHtml(e?.novedad || "");
+      const id = escapeHtml(e?.id || "");
 
-    // bind eliminar
-    tb.querySelectorAll(".btnMemoDel").forEach((b) => {
+      tr.innerHTML = `
+        <td>${causa}</td>
+        <td>${hora}</td>
+        <td>
+          <div>${novedad}</div>
+          ${e?.user ? `<div class="muted" style="margin-top:6px;font-size:12px;">${escapeHtml(e.user)}</div>` : ""}
+        </td>
+        <td>
+          <button type="button" class="btn-danger" data-del="${id}">Borrar</button>
+        </td>
+      `;
+
+      tb.appendChild(tr);
+    });
+
+    // Delegación: borrar
+    tb.querySelectorAll("button[data-del]").forEach((b) => {
       b.addEventListener("click", async () => {
-        const id = b.getAttribute("data-id");
-        if (!id) return;
-        const ok = confirm("¿Eliminar este asiento del Libro Memorandum?");
+        const targetId = b.getAttribute("data-del");
+        if (!targetId) return;
+
+        const ok = confirm("¿Eliminar este asiento del libro?");
         if (!ok) return;
-        await eliminarItem(id);
+
+        const entriesNow = Array.isArray(state?.entries) ? state.entries : [];
+        state = {
+          ...state,
+          entries: entriesNow.filter((x) => String(x.id) !== String(targetId)),
+        };
+
+        render();
+        await saveToServer();
       });
     });
   }
 
   async function loadFromServer() {
-    const { data, error } = await sb.from(TABLE).select("payload").eq("id", ROW_ID).limit(1);
+    const { data, error } = await sb
+      .from(TABLE)
+      .select("payload")
+      .eq("id", ROW_ID)
+      .limit(1);
 
     if (error) {
       console.warn("[LIBRO] load error:", error);
-      // No alert acá para no molestar al cargar
-      state = { items: [] };
+      // no alert automático
+      state = { entries: [] };
       return;
     }
 
     const payload = data?.[0]?.payload;
-    if (payload && typeof payload === "object") {
-      state = payload;
-      if (!Array.isArray(state.items)) state.items = [];
-    } else {
-      state = { items: [] };
-    }
+    if (payload && typeof payload === "object") state = payload;
+    else state = { entries: [] };
   }
 
   async function saveToServer() {
     const row = {
       id: ROW_ID,
       payload: state,
-      updated_at: new Date().toISOString(),
+      updated_at: nowIso(),
     };
 
     const { error } = await sb.from(TABLE).upsert(row, { onConflict: "id" });
@@ -124,67 +141,66 @@ export function initLibroMemorandum({ sb }) {
     if (error) {
       console.error("[LIBRO] save error:", error);
       alert(
-        "Error guardando Libro Memorandum. Mirá Console (F12).\n" +
-          "Si dice que la tabla no existe, hay que crear: " + TABLE
+        "Error guardando Libro Memorándum. Mirá Console (F12).\n" +
+          "Verificá que exista la tabla: " + TABLE
       );
       return false;
     }
     return true;
   }
 
-  function validarHHMM(h) {
-    const m = String(h || "").trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
-    return !!m;
+  function limpiarForm() {
+    const c = elCausa();
+    const h = elHora();
+    const n = elNovedad();
+
+    if (c) c.value = "";
+    if (h) h.value = "";
+    if (n) n.value = "";
   }
 
-  function generarId() {
-    return (crypto?.randomUUID?.() || String(Date.now()));
+  function validarHora(h) {
+    // acepta "20:15" / "8:05" pero normaliza a HH:MM si querés
+    const m = String(h || "").trim().match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return null;
+    const hh = Number(m[1]);
+    const mm = Number(m[2]);
+    if (hh < 0 || hh > 23) return null;
+    if (mm < 0 || mm > 59) return null;
+    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
   }
 
   async function onAgregar() {
     const causa = (elCausa()?.value || "").trim();
-    const hora = (elHora()?.value || "").trim();
+    const horaRaw = (elHora()?.value || "").trim();
+    const hora = validarHora(horaRaw);
     const novedad = (elNovedad()?.value || "").trim();
 
     if (!causa) return alert("Seleccioná una causa.");
-    if (!hora) return alert("Ingresá la hora.");
-    if (!validarHHMM(hora)) return alert("Hora inválida. Usá formato HH:MM (ej: 20:15).");
-    if (!novedad) return alert("Escribí la novedad/referencia.");
+    if (!hora) return alert("Hora inválida. Usá formato HH:MM (ej: 20:15).");
+    if (!novedad) return alert("Escribí la novedad / referencia.");
 
     const user = await getUserEmail();
 
-    const item = {
-      id: generarId(),
-      ts: new Date().toISOString(),
+    const entry = {
+      id: `${Date.now()}_${Math.random().toString(16).slice(2)}`, // id local único
+      ts: nowIso(),
       user,
       causa,
       hora,
       novedad,
     };
 
-    const items = Array.isArray(state?.items) ? state.items : [];
-    state = { ...state, items: [...items, item] };
+    const entries = Array.isArray(state?.entries) ? state.entries : [];
+    state = { ...state, entries: [...entries, entry] };
 
     render();
     await saveToServer();
-
-    // limpiar inputs (dejamos hora con “ahora” por comodidad)
-    if (elCausa()) elCausa().value = "";
-    if (elHora()) elHora().value = nowHHMM();
-    if (elNovedad()) elNovedad().value = "";
+    limpiarForm();
   }
 
   function onLimpiar() {
-    if (elCausa()) elCausa().value = "";
-    if (elHora()) elHora().value = nowHHMM();
-    if (elNovedad()) elNovedad().value = "";
-  }
-
-  async function eliminarItem(id) {
-    const items = Array.isArray(state?.items) ? state.items : [];
-    state = { ...state, items: items.filter((x) => String(x.id) !== String(id)) };
-    render();
-    await saveToServer();
+    limpiarForm();
   }
 
   return {
@@ -193,12 +209,10 @@ export function initLibroMemorandum({ sb }) {
       const l = btnLimpiar();
       if (a) a.addEventListener("click", onAgregar);
       if (l) l.addEventListener("click", onLimpiar);
-
-      // default hora
-      if (elHora() && !elHora().value) elHora().value = nowHHMM();
     },
 
     async init() {
+      // Si el tab no está montado, igual no rompe.
       await loadFromServer();
       render();
     },
