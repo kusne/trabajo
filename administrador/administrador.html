@@ -122,7 +122,7 @@
         <div class="grid-3col">
           <div>
             <label class="top-label">Causa</label>
-            <select id="memoCausa">
+            <select id="libroCausa">
               <option value="">Seleccionar</option>
               <option value="Ingreso">Ingreso</option>
               <option value="Retiro">Retiro</option>
@@ -133,13 +133,16 @@
 
           <div>
             <label class="top-label">Hora</label>
-            <input id="memoHora" type="time" />
+            <input id="libroHora" type="time" />
           </div>
 
           <div>
             <label class="top-label">Novedad / Referencia</label>
-            <textarea id="memoNovedad" rows="3"
-              placeholder="Ej: Móvil 10139 a cargo del Oficial Cardozo junto al Suboficial Aquino..."></textarea>
+            <textarea
+              id="libroNovedad"
+              rows="3"
+              placeholder="Ej: Móvil 10139 a cargo del Oficial Cardozo junto al Suboficial Aquino..."
+            ></textarea>
           </div>
         </div>
 
@@ -159,7 +162,7 @@
                 <th></th>
               </tr>
             </thead>
-            <tbody id="memoTbody">
+            <tbody id="libroTbody">
               <tr><td colspan="4" class="muted">Sin asientos todavía.</td></tr>
             </tbody>
           </table>
