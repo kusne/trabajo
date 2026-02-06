@@ -176,3 +176,78 @@ textarea{
   opacity:.7;
   margin-bottom:6px;
 }
+
+/* ===== ADDED: Libro memorándum (3 columnas + tabla) ===== */
+.grid-3col{
+  display:grid;
+  grid-template-columns: 220px 160px 1fr;
+  gap: 12px;
+  align-items:start;
+  margin-top: 10px;
+}
+
+@media (max-width: 820px){
+  .grid-3col{
+    grid-template-columns: 1fr;
+  }
+}
+
+.table-wrap{
+  margin-top: 10px;
+  border: 1px solid rgba(0,0,0,.10);
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255,255,255,.6);
+}
+
+.table{
+  width:100%;
+  border-collapse: collapse;
+}
+
+.table thead th{
+  text-align:left;
+  font-size: 12px;
+  letter-spacing: .2px;
+  opacity: .75;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(0,0,0,.10);
+  background: rgba(255,255,255,.55);
+}
+
+.table tbody td{
+  vertical-align: top;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+}
+
+.table tbody tr:last-child td{
+  border-bottom: 0;
+}
+
+.table td .muted{
+  margin: 0;
+}
+
+.table .btn-danger{
+  margin-top: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.table td:nth-child(1){
+  width: 180px;
+  white-space: nowrap;
+}
+
+.table td:nth-child(2){
+  width: 110px;
+  white-space: nowrap;
+}
+
+.table td:nth-child(4){
+  width: 1%;
+  text-align: right;
+}
