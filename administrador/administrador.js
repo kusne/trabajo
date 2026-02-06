@@ -1,220 +1,97 @@
-// administrador/js/libroMemorandum.js
-// Tabla: public.libro_memorandum_store (id int PK, payload jsonb, updated_at timestamptz)
-// Guarda un único JSON (id=1) similar a guardia.
+// administrador.js (ENTRYPOINT MODULAR)
+// Conecta: auth + tabs + módulos (ordenes/guardia/inventario/libro)
+// Mantiene puente global para onclick="agregarOrden()" y publicarOrdenes().
 
-const TABLE = "libro_memorandum_store";
-const ROW_ID = 1;
+import { createSbClient } from "../funciones/js/supabaseClient.js";
+import { initAuth } from "./js/auth.js";
+import { initTabs } from "./js/tabs.js";
+import { initOrdenes } from "./js/ordenes.js";
+import { initGuardia } from "./js/guardia.js";
+import { initInventario } from "./js/inventario.js";
+import { initLibroMemorandum } from "./js/libroMemorandum.js";
 
-export function initLibroMemorandum({ sb }) {
-  // ===== DOM getters (NO rompen si el tab no existe) =====
-  const elCausa = () => document.getElementById("libroCausa");
-  const elHora = () => document.getElementById("libroHora");
-  const elNovedad = () => document.getElementById("libroNovedad");
+// ===============================
+// Puentes globales (compat HTML)
+// ===============================
+window.agregarOrden = function () {
+  if (typeof window.__adm_agregarOrden === "function") return window.__adm_agregarOrden();
+  alert("ADM no inicializó agregarOrden. Revisá administrador.js y Ctrl+F5.");
+};
 
-  const tbody = () => document.getElementById("libroTbody");
-  const elPreview = () => document.getElementById("libroJsonPreview");
+window.publicarOrdenes = function () {
+  if (typeof window.__adm_publicarOrdenes === "function") return window.__adm_publicarOrdenes();
+  alert("ADM no inicializó publicarOrdenes. Revisá administrador.js y Ctrl+F5.");
+};
 
-  const btnAgregar = () => document.getElementById("btnLibroAgregar");
-  const btnLimpiar = () => document.getElementById("btnLibroLimpiar");
+window.eliminarOrden = function () {
+  if (typeof window.__adm_eliminarOrden === "function") return window.__adm_eliminarOrden();
+  alert("ADM no inicializó eliminarOrden. Revisá administrador.js y Ctrl+F5.");
+};
 
-  let state = { entries: [] };
+console.log("[ADM] administrador.js entrypoint cargado OK");
 
-  function nowIso() {
-    return new Date().toISOString();
-  }
+// ===============================
+// Bootstrap
+// ===============================
+const sb = createSbClient();
 
-  function escapeHtml(s) {
-    return String(s ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-  }
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    // Auth + Tabs
+    const auth = initAuth({ sb });
+    const tabs = initTabs({ defaultTab: "ordenes" });
 
-  async function getUserEmail() {
-    try {
-      const { data } = await sb.auth.getUser();
-      return data?.user?.email || null;
-    } catch {
-      return null;
+    // Módulos
+    const ordenes = initOrdenes({ sb });
+    const guardia = initGuardia({ sb });
+    const inventario = initInventario({ sb });
+    const libro = initLibroMemorandum({ sb });
+
+    // Bind UI handlers
+    if (ordenes?.bind) ordenes.bind();
+    if (guardia?.bind) guardia.bind();
+    if (inventario?.bind) inventario.bind();
+    if (libro?.bind) libro.bind();
+
+    // Conectar botones legacy si existen
+    // (por si tu módulo ordenes maneja estos métodos)
+    if (typeof ordenes?.agregarOrden === "function") window.__adm_agregarOrden = ordenes.agregarOrden;
+    if (typeof ordenes?.publicarOrdenes === "function") window.__adm_publicarOrdenes = ordenes.publicarOrdenes;
+    if (typeof ordenes?.eliminarOrden === "function") window.__adm_eliminarOrden = ordenes.eliminarOrden;
+
+    // Si tu HTML tiene botón "Eliminar" por id (sin onclick), lo conectamos acá también
+    const btnEliminar = document.getElementById("btnEliminarOrden");
+    if (btnEliminar && typeof ordenes?.eliminarOrden === "function") {
+      btnEliminar.addEventListener("click", ordenes.eliminarOrden);
+    } else if (btnEliminar && typeof window.__adm_eliminarOrden === "function") {
+      btnEliminar.addEventListener("click", window.__adm_eliminarOrden);
     }
-  }
 
-  function setPreview() {
-    const pre = elPreview();
-    if (pre) pre.textContent = JSON.stringify(state || {}, null, 2);
-  }
+    // Init auth flow
+    await auth.init({
+      onLoggedIn: async () => {
+        tabs.show();
 
-  function render() {
-    setPreview();
+        // Init ordenes primero, porque guardia toma lugares desde órdenes
+        if (ordenes?.init) await ordenes.init();
 
-    const tb = tbody();
-    if (!tb) return;
+        if (inventario?.init) await inventario.init();
 
-    tb.innerHTML = "";
+        // Si tu guardia necesita un callback de inventario, lo pasamos si existe
+        if (guardia?.init) {
+          const invLoad = inventario?.invLoad;
+          await guardia.init(invLoad ? { invLoad } : undefined);
+        }
 
-    const entries = Array.isArray(state?.entries) ? state.entries : [];
-    if (!entries.length) {
-      tb.innerHTML = `
-        <tr>
-          <td colspan="4" class="muted">Sin asientos todavía.</td>
-        </tr>`;
-      return;
-    }
+        if (libro?.init) await libro.init();
+      },
 
-    // mostrar últimos primero
-    const rows = [...entries].reverse();
-
-    rows.forEach((e) => {
-      const tr = document.createElement("tr");
-
-      const causa = escapeHtml(e?.causa || "");
-      const hora = escapeHtml(e?.hora || "");
-      const novedad = escapeHtml(e?.novedad || "");
-      const id = escapeHtml(e?.id || "");
-
-      tr.innerHTML = `
-        <td>${causa}</td>
-        <td>${hora}</td>
-        <td>
-          <div>${novedad}</div>
-          ${e?.user ? `<div class="muted" style="margin-top:6px;font-size:12px;">${escapeHtml(e.user)}</div>` : ""}
-        </td>
-        <td>
-          <button type="button" class="btn-danger" data-del="${id}">Borrar</button>
-        </td>
-      `;
-
-      tb.appendChild(tr);
+      onLoggedOut: () => {
+        tabs.hide();
+      },
     });
-
-    // Delegación: borrar
-    tb.querySelectorAll("button[data-del]").forEach((b) => {
-      b.addEventListener("click", async () => {
-        const targetId = b.getAttribute("data-del");
-        if (!targetId) return;
-
-        const ok = confirm("¿Eliminar este asiento del libro?");
-        if (!ok) return;
-
-        const entriesNow = Array.isArray(state?.entries) ? state.entries : [];
-        state = {
-          ...state,
-          entries: entriesNow.filter((x) => String(x.id) !== String(targetId)),
-        };
-
-        render();
-        await saveToServer();
-      });
-    });
+  } catch (err) {
+    console.error("[ADM] Error inicializando administrador.js:", err);
+    alert("Error inicializando ADM. Mirá Console (F12).");
   }
-
-  async function loadFromServer() {
-    const { data, error } = await sb
-      .from(TABLE)
-      .select("payload")
-      .eq("id", ROW_ID)
-      .limit(1);
-
-    if (error) {
-      console.warn("[LIBRO] load error:", error);
-      // no alert automático
-      state = { entries: [] };
-      return;
-    }
-
-    const payload = data?.[0]?.payload;
-    if (payload && typeof payload === "object") state = payload;
-    else state = { entries: [] };
-  }
-
-  async function saveToServer() {
-    const row = {
-      id: ROW_ID,
-      payload: state,
-      updated_at: nowIso(),
-    };
-
-    const { error } = await sb.from(TABLE).upsert(row, { onConflict: "id" });
-
-    if (error) {
-      console.error("[LIBRO] save error:", error);
-      alert(
-        "Error guardando Libro Memorándum. Mirá Console (F12).\n" +
-          "Verificá que exista la tabla: " + TABLE
-      );
-      return false;
-    }
-    return true;
-  }
-
-  function limpiarForm() {
-    const c = elCausa();
-    const h = elHora();
-    const n = elNovedad();
-
-    if (c) c.value = "";
-    if (h) h.value = "";
-    if (n) n.value = "";
-  }
-
-  function validarHora(h) {
-    // acepta "20:15" / "8:05" pero normaliza a HH:MM si querés
-    const m = String(h || "").trim().match(/^(\d{1,2}):(\d{2})$/);
-    if (!m) return null;
-    const hh = Number(m[1]);
-    const mm = Number(m[2]);
-    if (hh < 0 || hh > 23) return null;
-    if (mm < 0 || mm > 59) return null;
-    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
-  }
-
-  async function onAgregar() {
-    const causa = (elCausa()?.value || "").trim();
-    const horaRaw = (elHora()?.value || "").trim();
-    const hora = validarHora(horaRaw);
-    const novedad = (elNovedad()?.value || "").trim();
-
-    if (!causa) return alert("Seleccioná una causa.");
-    if (!hora) return alert("Hora inválida. Usá formato HH:MM (ej: 20:15).");
-    if (!novedad) return alert("Escribí la novedad / referencia.");
-
-    const user = await getUserEmail();
-
-    const entry = {
-      id: `${Date.now()}_${Math.random().toString(16).slice(2)}`, // id local único
-      ts: nowIso(),
-      user,
-      causa,
-      hora,
-      novedad,
-    };
-
-    const entries = Array.isArray(state?.entries) ? state.entries : [];
-    state = { ...state, entries: [...entries, entry] };
-
-    render();
-    await saveToServer();
-    limpiarForm();
-  }
-
-  function onLimpiar() {
-    limpiarForm();
-  }
-
-  return {
-    bind() {
-      const a = btnAgregar();
-      const l = btnLimpiar();
-      if (a) a.addEventListener("click", onAgregar);
-      if (l) l.addEventListener("click", onLimpiar);
-    },
-
-    async init() {
-      // Si el tab no está montado, igual no rompe.
-      await loadFromServer();
-      render();
-    },
-  };
-}
+});
