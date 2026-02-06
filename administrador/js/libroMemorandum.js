@@ -10,14 +10,15 @@ export function initLibroMemorandum({ sb }) {
   const elCausa = () => document.getElementById("libroCausa");
   const elHora = () => document.getElementById("libroHora");
   const elNovedad = () => document.getElementById("libroNovedad");
-  const tbody = () => document.getElementById("libroTbody");
 
+  const tbody = () => document.getElementById("libroTbody");
   const elPreview = () => document.getElementById("libroJsonPreview");
 
   const btnAgregar = () => document.getElementById("btnLibroAgregar");
   const btnLimpiar = () => document.getElementById("btnLibroLimpiar");
+  const btnImportarGuardia = () => document.getElementById("btnLibroImportarGuardia");
 
-  let state = { entries: [] };
+  let state = { entries: [], importedKeys: [] };
 
   function nowIso() {
     return new Date().toISOString();
@@ -104,12 +105,16 @@ export function initLibroMemorandum({ sb }) {
 
     if (error) {
       console.warn("[LIBRO] load error:", error);
-      state = { entries: [] };
+      state = { entries: [], importedKeys: [] };
       return;
     }
 
     const payload = data?.[0]?.payload;
-    state = payload && typeof payload === "object" ? payload : { entries: [] };
+    state = payload && typeof payload === "object" ? payload : { entries: [], importedKeys: [] };
+
+    // normalización suave
+    if (!Array.isArray(state.entries)) state.entries = [];
+    if (!Array.isArray(state.importedKeys)) state.importedKeys = [];
   }
 
   async function saveToServer() {
@@ -167,6 +172,97 @@ export function initLibroMemorandum({ sb }) {
     limpiarForm();
   }
 
+  function keyForImported(e) {
+    // clave estable: ts + patrulla + accion
+    const ts = String(e?.ts || "");
+    const patrulla = String(e?.patrulla || "");
+    const accion = String(e?.accion || "");
+    return `${ts}__${patrulla}__${accion}`;
+  }
+
+  async function loadGuardiaPayload() {
+    const { data, error } = await sb.from("guardia_estado").select("payload").eq("id", 1).limit(1);
+    if (error) {
+      console.warn("[LIBRO] no pude leer guardia_estado:", error);
+      return null;
+    }
+    return data?.[0]?.payload || null;
+  }
+
+  function buildNovedadFromLogItem(item) {
+    const snap = item?.snapshot || {};
+    const lugar = String(snap?.lugar || "").trim();
+    const obs = String(snap?.obs || "").trim();
+    const encabezado = `${String(item?.patrulla || "")} ${String(item?.accion || "").toUpperCase()} ${String(item?.hora || "")}`.trim();
+
+    const base = String(item?.resumen || "").trim();
+    const parts = [];
+    if (encabezado) parts.push(encabezado);
+    if (lugar) parts.push(`Lugar: ${lugar}`);
+    if (obs) parts.push(`Obs: ${obs}`);
+    if (base) parts.push(base);
+
+    return parts.join(" | ");
+  }
+
+  async function onImportarGuardia() {
+    const payload = await loadGuardiaPayload();
+    const log = Array.isArray(payload?.log) ? payload.log : [];
+
+    if (!log.length) {
+      alert("Guardia: no hay registros para importar.");
+      return;
+    }
+
+    const entries = Array.isArray(state?.entries) ? state.entries : [];
+    const importedKeys = new Set(Array.isArray(state?.importedKeys) ? state.importedKeys : []);
+
+    let added = 0;
+    const user = await getUserEmail();
+
+    // importamos desde el más viejo al más nuevo para que el libro quede cronológico
+    const ordered = [...log].reverse();
+
+    ordered.forEach((item) => {
+      const k = keyForImported(item);
+      if (importedKeys.has(k)) return;
+
+      const hora = validarHora(String(item?.hora || "").trim());
+      if (!hora) return;
+
+      const entry = {
+        id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+        ts: String(item?.ts || nowIso()),
+        user,
+        causa: "GUARDIA",
+        hora,
+        novedad: buildNovedadFromLogItem(item),
+        // guardamos el original por si luego querés rearmar texto
+        source: {
+          from: "guardia_estado",
+          patrulla: item?.patrulla,
+          accion: item?.accion,
+          ts: item?.ts,
+          snapshot: item?.snapshot || null,
+        },
+      };
+
+      entries.push(entry);
+      importedKeys.add(k);
+      added += 1;
+    });
+
+    if (!added) {
+      alert("No se importó nada (todo ya estaba importado o sin hora válida).");
+      return;
+    }
+
+    state = { ...state, entries, importedKeys: Array.from(importedKeys) };
+    render();
+    await saveToServer();
+    alert(`Importado(s): ${added} asiento(s) desde Guardia.`);
+  }
+
   function onLimpiar() {
     limpiarForm();
   }
@@ -175,8 +271,10 @@ export function initLibroMemorandum({ sb }) {
     bind() {
       const a = btnAgregar();
       const l = btnLimpiar();
+      const ig = btnImportarGuardia();
       if (a) a.addEventListener("click", onAgregar);
       if (l) l.addEventListener("click", onLimpiar);
+      if (ig) ig.addEventListener("click", () => onImportarGuardia().catch(console.error));
     },
     async init() {
       await loadFromServer();
