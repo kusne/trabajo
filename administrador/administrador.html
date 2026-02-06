@@ -83,64 +83,89 @@
         </div>
       </section>
 
-      <!-- TAB: GUARDIA -->
       <section id="tab-guardia" class="tab-panel">
         <h2>Guardia</h2>
-        <p class="muted">Módulo de Guardia (Ingreso / Retiro). Guardamos un JSON único (id=1) en Supabase.</p>
+        <p class="muted">Armá patrullas (personal/móviles/elementos) y registrá acciones. Se guarda en Supabase.</p>
 
-        <label class="top-label">Lugar (desde órdenes)</label>
-        <select id="guardiaLugar">
-          <option value="">Seleccionar lugar</option>
-        </select>
-
-        <h3>Estado</h3>
-        <div id="guardiaEstado" class="state">Sin guardia activa</div>
+        <div id="guardiaEstadoTxt" class="state">—</div>
 
         <div class="row">
-          <button type="button" id="btnGuardiaIngreso" class="btn-primary">Ingreso</button>
-          <button type="button" id="btnGuardiaRetiro" class="btn-ghost">Retiro</button>
+          <button type="button" id="btnGuardiaGuardar" class="btn-primary">Guardar</button>
+          <button type="button" id="btnGuardiaActualizar" class="btn-ghost">Actualizar</button>
+        </div>
+
+        <!-- Subsolapas -->
+        <div class="row">
+          <button type="button" class="subtab-btn is-active" data-subtab="p1">Patrulla 1</button>
+          <button type="button" class="subtab-btn" data-subtab="p2">Patrulla 2</button>
+        </div>
+
+        <!-- P1 -->
+        <div id="patrulla-p1" class="tab-panel is-active">
+          <h3>Patrulla 1</h3>
+
+          <label>Lugar</label>
+          <select id="p1Lugar"><option value="">Seleccionar lugar</option></select>
+
+          <label>Observación</label>
+          <input id="p1Obs" type="text" placeholder="Opcional" />
+
+          <label>Personal</label>
+          <div id="p1Personal"></div>
+
+          <label>Móviles</label>
+          <div id="p1Moviles"></div>
+
+          <label>Elementos</label>
+          <div id="p1Elementos"></div>
+
+          <label>Cartuchos (solo si hay escopeta)</label>
+          <div id="p1Cartuchos"></div>
+
+          <div class="row">
+            <button type="button" class="btn-primary" data-accion="ingreso" data-p="p1">Ingreso</button>
+            <button type="button" class="btn-ghost" data-accion="retiro" data-p="p1">Retiro</button>
+            <button type="button" class="btn-ghost" data-accion="presente" data-p="p1">Presente</button>
+            <button type="button" class="btn-ghost" data-accion="franco" data-p="p1">Franco</button>
+            <button type="button" class="btn-ghost" data-accion="constancia" data-p="p1">Constancia</button>
+          </div>
+        </div>
+
+        <!-- P2 -->
+        <div id="patrulla-p2" class="tab-panel">
+          <h3>Patrulla 2</h3>
+
+          <label>Lugar</label>
+          <select id="p2Lugar"><option value="">Seleccionar lugar</option></select>
+
+          <label>Observación</label>
+          <input id="p2Obs" type="text" placeholder="Opcional" />
+
+          <label>Personal</label>
+          <div id="p2Personal"></div>
+
+          <label>Móviles</label>
+          <div id="p2Moviles"></div>
+
+          <label>Elementos</label>
+          <div id="p2Elementos"></div>
+
+          <label>Cartuchos (solo si hay escopeta)</label>
+          <div id="p2Cartuchos"></div>
+
+          <div class="row">
+            <button type="button" class="btn-primary" data-accion="ingreso" data-p="p2">Ingreso</button>
+            <button type="button" class="btn-ghost" data-accion="retiro" data-p="p2">Retiro</button>
+            <button type="button" class="btn-ghost" data-accion="presente" data-p="p2">Presente</button>
+            <button type="button" class="btn-ghost" data-accion="franco" data-p="p2">Franco</button>
+            <button type="button" class="btn-ghost" data-accion="constancia" data-p="p2">Constancia</button>
+          </div>
         </div>
 
         <h3>Salida JSON (preview)</h3>
         <pre id="guardiaJsonPreview" class="json-preview">{}</pre>
       </section>
 
-      <section id="tab-inventario" class="tab-panel">
-        <h2>Inventario</h2>
-        <p class="muted">Altas/edición/activación de Personal, Móviles y Elementos.</p>
-
-        <div id="invEstado" class="state">—</div>
-
-        <label>Tipo</label>
-        <select id="invTipo">
-          <option value="personal">personal</option>
-          <option value="movil">movil</option>
-          <option value="elemento">elemento</option>
-        </select>
-
-        <label>Label</label>
-        <input id="invLabel" type="text" placeholder="Ej: Suboficial Pintos" />
-
-        <label>Value (opcional)</label>
-        <input id="invValue" type="text" placeholder="auto si está vacío" />
-
-        <label>Orden</label>
-        <input id="invOrden" type="number" value="0" />
-
-        <label>Subgrupo (solo elemento)</label>
-        <input id="invSubgrupo" type="text" placeholder="Ej: Alcoholimetros / HT / Escopetas..." />
-
-        <label>Meta extra (JSON opcional)</label>
-        <textarea id="invMetaExtra" rows="3" placeholder='{"cartucho_tipo":"posta"}'></textarea>
-
-        <div class="row">
-          <button type="button" id="btnInvAgregar" class="btn-primary">Agregar</button>
-          <button type="button" id="btnInvRefrescar" class="btn-ghost">Refrescar</button>
-        </div>
-
-        <h3>Ítems</h3>
-        <div id="invLista"></div>
-      </section>
 
 
       <!-- TAB: LIBRO MEMORÁNDUM (3 columnas) -->
@@ -222,5 +247,6 @@
   </div>
 </body>
 </html>
+
 
 
