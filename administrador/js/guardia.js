@@ -222,7 +222,7 @@ function formatLogEntry(e) {
 }
 
 /**
- * ✅ NUEVO: parser de lugares desde el textarea #franjas (Órdenes)
+ * Parser de lugares desde el textarea #franjas (Órdenes)
  * Acepta líneas tipo:
  * "07 a 11 hs - RN168 km18 - Control vehicular"
  * y variantes con guiones.
@@ -235,17 +235,12 @@ function getLugaresFromFranjasTextarea() {
     const s = String(line || "").trim();
     if (!s) return;
 
-    // Intento 1: separador " - "
     let parts = s.split(" - ").map((x) => x.trim()).filter(Boolean);
-
-    // Intento 2: si no hay " - ", probamos con "-"
     if (parts.length < 2) {
       parts = s.split("-").map((x) => x.trim()).filter(Boolean);
     }
-
     if (parts.length < 2) return;
 
-    // Formato: HORARIO - LUGAR - TITULO => lugar en índice 1
     const lugar = normalizarLugar(parts[1]);
     if (lugar) out.add(lugar);
   });
@@ -270,13 +265,93 @@ function getLugaresFromOrdenes() {
 }
 
 /**
+ * ✅ NUEVO: leer TODAS las órdenes guardadas (aunque no estén seleccionadas)
+ * 1) intenta métodos de storageApp
+ * 2) si no existen, intenta localStorage keys comunes
+ */
+function tryGetOrdenesFromStorageApp() {
+  try {
+    const sa = window.storageApp;
+    if (sa) {
+      if (typeof sa.getOrdenes === "function") return sa.getOrdenes() || [];
+      if (typeof sa.listOrdenes === "function") return sa.listOrdenes() || [];
+      if (typeof sa.getAllOrdenes === "function") return sa.getAllOrdenes() || [];
+      if (Array.isArray(sa.ordenes)) return sa.ordenes || [];
+    }
+
+    // fallback suave a localStorage (keys típicas; si no están, no rompe)
+    const keys = [
+      "ordenes_operacionales",
+      "ordenesOperacionales",
+      "ordenes",
+      "orders",
+      "ordenes_storage",
+    ];
+
+    for (const k of keys) {
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+
+      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed?.ordenes)) return parsed.ordenes;
+      if (Array.isArray(parsed?.items)) return parsed.items;
+    }
+
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * ✅ NUEVO: extraer lugares desde un array de órdenes guardadas
+ * Soporta:
+ * - o.franjas[] con { lugar }
+ * - o.franjasTexto / o.franjas_texto (string con líneas HORARIO - LUGAR - TITULO)
+ */
+function extractLugaresFromOrdenesArray(ords) {
+  const out = new Set();
+
+  (Array.isArray(ords) ? ords : []).forEach((o) => {
+    const franjas = Array.isArray(o?.franjas) ? o.franjas : [];
+    franjas.forEach((f) => {
+      const l = normalizarLugar(f?.lugar || "");
+      if (l) out.add(l);
+    });
+
+    const franjasTxt = String(o?.franjasTexto || o?.franjas_texto || "").trim();
+    if (franjasTxt) {
+      franjasTxt.split("\n").forEach((line) => {
+        const s = line.trim();
+        if (!s) return;
+
+        let parts = s.split(" - ").map((x) => x.trim()).filter(Boolean);
+        if (parts.length < 2) parts = s.split("-").map((x) => x.trim()).filter(Boolean);
+        if (parts.length < 2) return;
+
+        const lugar = normalizarLugar(parts[1]);
+        if (lugar) out.add(lugar);
+      });
+    }
+  });
+
+  return Array.from(out).sort((a, b) => a.localeCompare(b));
+}
+
+/**
  * ✅ NUEVO: lugares SMART
  * 1) usa state.ordenes si tiene data
- * 2) si no, usa #franjas
+ * 2) si no, usa TODAS las órdenes guardadas (storageApp / localStorage)
+ * 3) si no, usa #franjas
  */
 function getLugaresSmart() {
   const fromState = getLugaresFromOrdenes();
   if (fromState.length) return fromState;
+
+  const ordsStored = tryGetOrdenesFromStorageApp();
+  const fromStored = extractLugaresFromOrdenesArray(ordsStored);
+  if (fromStored.length) return fromStored;
 
   const fromFranjas = getLugaresFromFranjasTextarea();
   if (fromFranjas.length) return fromFranjas;
@@ -328,7 +403,7 @@ export function initGuardia({ sb, subtabs } = {}) {
   }
 
   function renderGuardiaDesdeInventario() {
-    // ✅ Lugares SMART (state.ordenes o fallback #franjas)
+    // ✅ Lugares SMART
     const lugares = getLugaresSmart();
     fillSelectOptions(p1Lugar, lugares, guardiaState?.patrullas?.p1?.lugar || "");
     fillSelectOptions(p2Lugar, lugares, guardiaState?.patrullas?.p2?.lugar || "");
@@ -561,12 +636,11 @@ export function initGuardia({ sb, subtabs } = {}) {
   }
 
   /**
-   * ✅ NUEVO: refrescar lugares cuando se GUARDA una orden (botón guardar órdenes)
+   * refrescar lugares cuando se GUARDA una orden (botón guardar órdenes)
    * - Caso 1: botón con onclick="agregarOrden()"
    * - Caso 2: hook al wrapper global window.agregarOrden (sin romper nada)
    */
   function bindRefrescoPorGuardarOrden() {
-    // 1) listener directo al botón (si existe)
     const btnGuardarOrden =
       document.querySelector('button[onclick*="agregarOrden"]') ||
       document.getElementById("btnGuardarOrden") ||
@@ -574,7 +648,6 @@ export function initGuardia({ sb, subtabs } = {}) {
 
     if (btnGuardarOrden) {
       btnGuardarOrden.addEventListener("click", () => {
-        // esperamos un toque por si el código de órdenes toca el textarea/estado
         setTimeout(() => {
           refreshLugares();
           renderGuardiaPreview();
@@ -583,7 +656,6 @@ export function initGuardia({ sb, subtabs } = {}) {
       });
     }
 
-    // 2) hook al global agregarOrden (si existe y no está hookeado)
     if (typeof window !== "undefined" && typeof window.agregarOrden === "function") {
       if (!window.__guardia_hook_agregarOrden) {
         window.__guardia_hook_agregarOrden = true;
@@ -603,7 +675,6 @@ export function initGuardia({ sb, subtabs } = {}) {
       }
     }
 
-    // 3) si el usuario edita franjas, también refrescamos
     const franjasEl = document.getElementById("franjas");
     if (franjasEl) {
       franjasEl.addEventListener("input", () => {
@@ -621,7 +692,7 @@ export function initGuardia({ sb, subtabs } = {}) {
     bindAccionesEstado();
     bindReglaCartuchosLive();
 
-    // ✅ Nuevo: refresco automático al guardar una orden
+    // refresco automático al guardar una orden
     bindRefrescoPorGuardarOrden();
 
     // Re-render UI cuando cambia inventario
@@ -632,12 +703,10 @@ export function initGuardia({ sb, subtabs } = {}) {
   }
 
   async function init({ invLoad } = {}) {
-    // Subtabs (si están presentes)
     try {
       if (subtabs?.boot) subtabs.boot();
     } catch {}
 
-    // cargar guardia y pintar UI
     await onActualizarGuardia({ invLoad });
     renderGuardiaDesdeInventario();
     renderGuardiaPreview();
