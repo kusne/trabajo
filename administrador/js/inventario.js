@@ -12,8 +12,66 @@ export function invLabelFromValue(tipo, value) {
   return r ? r.label : value;
 }
 
+function ensureInventarioUI() {
+  // Si no existe el formulario, lo inyectamos dentro de inventarioRoot
+  const invTipo = document.getElementById("invTipo");
+  if (invTipo) return;
+
+  const root = document.getElementById("inventarioRoot");
+  if (!root) return;
+
+  root.innerHTML = `
+    <div class="row" style="margin-top:0;">
+      <div style="flex:1; min-width:220px;">
+        <label class="top-label">Tipo</label>
+        <select id="invTipo">
+          <option value="personal">personal</option>
+          <option value="movil">movil</option>
+          <option value="elemento">elemento</option>
+        </select>
+      </div>
+
+      <div style="flex:2; min-width:240px;">
+        <label class="top-label">Label</label>
+        <input id="invLabel" type="text" placeholder="Ej: Suboficial Pérez" />
+      </div>
+
+      <div style="flex:2; min-width:240px;">
+        <label class="top-label">Value (auto)</label>
+        <input id="invValue" type="text" placeholder="Ej: suboficial_perez" />
+      </div>
+
+      <div style="width:120px;">
+        <label class="top-label">Orden</label>
+        <input id="invOrden" type="number" value="0" />
+      </div>
+    </div>
+
+    <div class="row">
+      <div style="flex:1; min-width:260px;">
+        <label class="top-label">Subgrupo (solo elemento)</label>
+        <input id="invSubgrupo" type="text" placeholder="Ej: escopetas / ht / pdas..." />
+      </div>
+      <div style="flex:2; min-width:260px;">
+        <label class="top-label">Meta extra (JSON opcional)</label>
+        <input id="invMetaExtra" type="text" placeholder='{"calibre":"12/70"}' />
+      </div>
+    </div>
+
+    <div class="row">
+      <button type="button" id="btnInvAgregar" class="btn-primary">Agregar</button>
+      <button type="button" id="btnInvRefrescar" class="btn-ghost">Refrescar</button>
+      <div id="invEstado" class="muted" style="margin:0;">—</div>
+    </div>
+
+    <div id="invLista" style="margin-top:12px;"></div>
+  `;
+}
+
 export function initInventario({ sb, onInventarioChanged } = {}) {
-  // ===== DOM refs =====
+  ensureInventarioUI();
+
+  // ===== DOM refs (después del ensure) =====
   const invTipo = document.getElementById("invTipo");
   const invLabel = document.getElementById("invLabel");
   const invValue = document.getElementById("invValue");
@@ -132,7 +190,7 @@ export function initInventario({ sb, onInventarioChanged } = {}) {
     const nMetaStr = prompt("Editar meta (JSON) — vacío para null:", item.meta ? JSON.stringify(item.meta) : "");
     if (nMetaStr === null) return;
     const parsed = safeParseJson(nMetaStr);
-    if (parsed === "__INVALID__") return alert("Meta inválido (JSON)." );
+    if (parsed === "__INVALID__") return alert("Meta inválido (JSON).");
 
     const { error } = await sb
       .from("inventario_base")
@@ -141,7 +199,7 @@ export function initInventario({ sb, onInventarioChanged } = {}) {
 
     if (error) {
       console.error("[ADMIN] inventario_base update error:", error);
-      alert("Error editando inventario. Mirá Console (F12)." );
+      alert("Error editando inventario. Mirá Console (F12).");
       return;
     }
 
@@ -177,7 +235,7 @@ export function initInventario({ sb, onInventarioChanged } = {}) {
             </div>
             <div style="display:flex; gap:8px;">
               <button type="button" class="btn-ghost" data-inv-edit="${esc(it.id)}">Editar</button>
-              <button type="button" class="${it.activo ? "btn-danger" : "btn-success"}" data-inv-toggle="${esc(it.id)}" data-next="${it.activo ? "0" : "1"}">
+              <button type="button" class="${it.activo ? "btn-danger" : "btn-primary"}" data-inv-toggle="${esc(it.id)}" data-next="${it.activo ? "0" : "1"}">
                 ${it.activo ? "Desactivar" : "Activar"}
               </button>
             </div>
@@ -216,5 +274,5 @@ export function initInventario({ sb, onInventarioChanged } = {}) {
     }
   }
 
-  return { bind, invLoad };
+  return { bind, invLoad, init: invLoad };
 }
