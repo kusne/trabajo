@@ -1,38 +1,220 @@
-import { createSbClient } from "../funciones/js/supabaseClient.js";
-import { initAuth } from "./js/auth.js";
-import { initTabs } from "./js/tabs.js";
-import { initOrdenes } from "./js/ordenes.js";
-import { initGuardia } from "./js/guardia.js";
-import { initInventario } from "./js/inventario.js";
-import { initLibroMemorandum } from "./js/libroMemorandum.js";
+// administrador/js/libroMemorandum.js
+// Tabla: public.libro_memorandum_store (id int PK, payload jsonb, updated_at timestamptz)
+// Guarda un único JSON (id=1) similar a guardia.
 
-const sb = createSbClient();
+const TABLE = "libro_memorandum_store";
+const ROW_ID = 1;
 
-document.addEventListener("DOMContentLoaded", async () => {
-  const auth = initAuth({ sb });
-  const tabs = initTabs({ defaultTab: "ordenes" });
+export function initLibroMemorandum({ sb }) {
+  // ===== DOM getters (NO rompen si el tab no existe) =====
+  const elCausa = () => document.getElementById("libroCausa");
+  const elHora = () => document.getElementById("libroHora");
+  const elNovedad = () => document.getElementById("libroNovedad");
 
-  const ordenes = initOrdenes({ sb });
-  const guardia = initGuardia({ sb });
-  const inventario = initInventario({ sb });
-  const libro = initLibroMemorandum({ sb });
+  const tbody = () => document.getElementById("libroTbody");
+  const elPreview = () => document.getElementById("libroJsonPreview");
 
-  ordenes.bind();
-  guardia.bind();
-  inventario.bind();
-  libro.bind();
+  const btnAgregar = () => document.getElementById("btnLibroAgregar");
+  const btnLimpiar = () => document.getElementById("btnLibroLimpiar");
 
-  await auth.init({
-    onLoggedIn: async () => {
-      tabs.show();
+  let state = { entries: [] };
 
-      await ordenes.init();
-      await inventario.init();
-      await guardia.init({ invLoad: inventario.invLoad });
-      await libro.init();
+  function nowIso() {
+    return new Date().toISOString();
+  }
+
+  function escapeHtml(s) {
+    return String(s ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  async function getUserEmail() {
+    try {
+      const { data } = await sb.auth.getUser();
+      return data?.user?.email || null;
+    } catch {
+      return null;
+    }
+  }
+
+  function setPreview() {
+    const pre = elPreview();
+    if (pre) pre.textContent = JSON.stringify(state || {}, null, 2);
+  }
+
+  function render() {
+    setPreview();
+
+    const tb = tbody();
+    if (!tb) return;
+
+    tb.innerHTML = "";
+
+    const entries = Array.isArray(state?.entries) ? state.entries : [];
+    if (!entries.length) {
+      tb.innerHTML = `
+        <tr>
+          <td colspan="4" class="muted">Sin asientos todavía.</td>
+        </tr>`;
+      return;
+    }
+
+    // mostrar últimos primero
+    const rows = [...entries].reverse();
+
+    rows.forEach((e) => {
+      const tr = document.createElement("tr");
+
+      const causa = escapeHtml(e?.causa || "");
+      const hora = escapeHtml(e?.hora || "");
+      const novedad = escapeHtml(e?.novedad || "");
+      const id = escapeHtml(e?.id || "");
+
+      tr.innerHTML = `
+        <td>${causa}</td>
+        <td>${hora}</td>
+        <td>
+          <div>${novedad}</div>
+          ${e?.user ? `<div class="muted" style="margin-top:6px;font-size:12px;">${escapeHtml(e.user)}</div>` : ""}
+        </td>
+        <td>
+          <button type="button" class="btn-danger" data-del="${id}">Borrar</button>
+        </td>
+      `;
+
+      tb.appendChild(tr);
+    });
+
+    // Delegación: borrar
+    tb.querySelectorAll("button[data-del]").forEach((b) => {
+      b.addEventListener("click", async () => {
+        const targetId = b.getAttribute("data-del");
+        if (!targetId) return;
+
+        const ok = confirm("¿Eliminar este asiento del libro?");
+        if (!ok) return;
+
+        const entriesNow = Array.isArray(state?.entries) ? state.entries : [];
+        state = {
+          ...state,
+          entries: entriesNow.filter((x) => String(x.id) !== String(targetId)),
+        };
+
+        render();
+        await saveToServer();
+      });
+    });
+  }
+
+  async function loadFromServer() {
+    const { data, error } = await sb
+      .from(TABLE)
+      .select("payload")
+      .eq("id", ROW_ID)
+      .limit(1);
+
+    if (error) {
+      console.warn("[LIBRO] load error:", error);
+      // no alert automático
+      state = { entries: [] };
+      return;
+    }
+
+    const payload = data?.[0]?.payload;
+    if (payload && typeof payload === "object") state = payload;
+    else state = { entries: [] };
+  }
+
+  async function saveToServer() {
+    const row = {
+      id: ROW_ID,
+      payload: state,
+      updated_at: nowIso(),
+    };
+
+    const { error } = await sb.from(TABLE).upsert(row, { onConflict: "id" });
+
+    if (error) {
+      console.error("[LIBRO] save error:", error);
+      alert(
+        "Error guardando Libro Memorándum. Mirá Console (F12).\n" +
+          "Verificá que exista la tabla: " + TABLE
+      );
+      return false;
+    }
+    return true;
+  }
+
+  function limpiarForm() {
+    const c = elCausa();
+    const h = elHora();
+    const n = elNovedad();
+
+    if (c) c.value = "";
+    if (h) h.value = "";
+    if (n) n.value = "";
+  }
+
+  function validarHora(h) {
+    // acepta "20:15" / "8:05" pero normaliza a HH:MM si querés
+    const m = String(h || "").trim().match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return null;
+    const hh = Number(m[1]);
+    const mm = Number(m[2]);
+    if (hh < 0 || hh > 23) return null;
+    if (mm < 0 || mm > 59) return null;
+    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+  }
+
+  async function onAgregar() {
+    const causa = (elCausa()?.value || "").trim();
+    const horaRaw = (elHora()?.value || "").trim();
+    const hora = validarHora(horaRaw);
+    const novedad = (elNovedad()?.value || "").trim();
+
+    if (!causa) return alert("Seleccioná una causa.");
+    if (!hora) return alert("Hora inválida. Usá formato HH:MM (ej: 20:15).");
+    if (!novedad) return alert("Escribí la novedad / referencia.");
+
+    const user = await getUserEmail();
+
+    const entry = {
+      id: `${Date.now()}_${Math.random().toString(16).slice(2)}`, // id local único
+      ts: nowIso(),
+      user,
+      causa,
+      hora,
+      novedad,
+    };
+
+    const entries = Array.isArray(state?.entries) ? state.entries : [];
+    state = { ...state, entries: [...entries, entry] };
+
+    render();
+    await saveToServer();
+    limpiarForm();
+  }
+
+  function onLimpiar() {
+    limpiarForm();
+  }
+
+  return {
+    bind() {
+      const a = btnAgregar();
+      const l = btnLimpiar();
+      if (a) a.addEventListener("click", onAgregar);
+      if (l) l.addEventListener("click", onLimpiar);
     },
-    onLoggedOut: () => {
-      tabs.hide();
+
+    async init() {
+      // Si el tab no está montado, igual no rompe.
+      await loadFromServer();
+      render();
     },
-  });
-});
+  };
+}
