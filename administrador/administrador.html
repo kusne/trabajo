@@ -85,164 +85,163 @@
 
       <!-- TAB: GUARDIA (AJUSTADO A guardia.js + subtabsPatrullas.js) -->
       <section id="tab-guardia" class="tab-panel">
-        <h2>Guardia</h2>
-        <p class="muted">Armar Patrulla 1 / Patrulla 2 (personal + móvil/es + elementos) y registrar acciones: ingreso/retiro/presente/franco/constancia.</p>
+        <div class="guardia-wrap">
 
-        <div class="row" style="justify-content:space-between;">
-          <div id="guardiaEstadoTxt" class="muted">Última actualización: —</div>
-          <div class="row" style="margin-top:0;">
-            <button type="button" id="btnGuardiaActualizar" class="btn-ghost">Actualizar</button>
-            <button type="button" id="btnGuardiaGuardar" class="btn-primary">Guardar Guardia</button>
+          <!-- HEADER GUARDIA -->
+          <div class="guardia-header">
+            <div class="guardia-title">
+              <h2 class="m-0">Guardia</h2>
+              <p class="muted m-0">Armar Patrulla 1 / Patrulla 2 y registrar acciones: ingreso/retiro/presente/franco/constancia.</p>
+            </div>
+
+            <div class="guardia-actions">
+              <div id="guardiaEstadoTxt" class="guardia-state">Última actualización: —</div>
+              <div class="guardia-btns">
+                <button type="button" id="btnGuardiaActualizar" class="btn-ghost">Actualizar</button>
+                <button type="button" id="btnGuardiaGuardar" class="btn-primary">Guardar Guardia</button>
+              </div>
+            </div>
           </div>
+
+          <!-- SUBTABS -->
+          <div class="guardia-subtabs">
+            <button type="button" class="subtab-btn is-active" data-subtab="p1">Patrulla 1</button>
+            <button type="button" class="subtab-btn" data-subtab="p2">Patrulla 2</button>
+          </div>
+
+          <!-- PATRULLA 1 -->
+          <section id="patrulla-p1" class="subtab-panel is-active patrulla-card">
+            <div class="patrulla-header">
+              <h3 class="m-0">Patrulla 1</h3>
+              <div class="patrulla-actions">
+                <button type="button" class="btn-primary" data-accion="Ingreso" data-p="p1">Ingreso</button>
+                <button type="button" class="btn-ghost" data-accion="Retiro" data-p="p1">Retiro</button>
+                <button type="button" class="btn-ghost" data-accion="Presente" data-p="p1">Presente</button>
+                <button type="button" class="btn-ghost" data-accion="Franco" data-p="p1">Franco</button>
+                <button type="button" class="btn-ghost" data-accion="Constancia" data-p="p1">Constancia</button>
+              </div>
+            </div>
+
+            <div class="guardia-grid">
+
+              <div class="g-section">
+                <div class="g-section-title">Lugar / QTH</div>
+                <div class="g-section-body">
+                  <select id="p1Lugar">
+                    <option value="">Seleccionar</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="g-section">
+                <div class="g-section-title">Observaciones</div>
+                <div class="g-section-body">
+                  <textarea id="p1Obs" rows="2" placeholder="Observaciones patrulla 1..."></textarea>
+                </div>
+              </div>
+
+              <div class="g-section g-span-2">
+                <div class="g-section-title">Personal</div>
+                <div class="g-section-body">
+                  <div id="p1Personal" class="list"></div>
+                </div>
+              </div>
+
+              <div class="g-section g-span-2">
+                <div class="g-section-title">Móvil/es</div>
+                <div class="g-section-body">
+                  <div id="p1Moviles" class="list"></div>
+                </div>
+              </div>
+
+              <div class="g-section g-span-2">
+                <div class="g-section-title">Elementos</div>
+                <div class="g-section-body">
+                  <div id="p1Elementos" class="list"></div>
+                </div>
+              </div>
+
+              <div class="g-section g-span-2">
+                <div class="g-section-title">Cartuchos (solo si hay escopeta)</div>
+                <div class="g-section-body">
+                  <div id="p1Cartuchos" class="list"></div>
+                </div>
+              </div>
+
+            </div>
+          </section>
+
+          <!-- PATRULLA 2 -->
+          <section id="patrulla-p2" class="subtab-panel patrulla-card" style="display:none;">
+            <div class="patrulla-header">
+              <h3 class="m-0">Patrulla 2</h3>
+              <div class="patrulla-actions">
+                <button type="button" class="btn-primary" data-accion="Ingreso" data-p="p2">Ingreso</button>
+                <button type="button" class="btn-ghost" data-accion="Retiro" data-p="p2">Retiro</button>
+                <button type="button" class="btn-ghost" data-accion="Presente" data-p="p2">Presente</button>
+                <button type="button" class="btn-ghost" data-accion="Franco" data-p="p2">Franco</button>
+                <button type="button" class="btn-ghost" data-accion="Constancia" data-p="p2">Constancia</button>
+              </div>
+            </div>
+
+            <div class="guardia-grid">
+
+              <div class="g-section">
+                <div class="g-section-title">Lugar / QTH</div>
+                <div class="g-section-body">
+                  <select id="p2Lugar">
+                    <option value="">Seleccionar</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="g-section">
+                <div class="g-section-title">Observaciones</div>
+                <div class="g-section-body">
+                  <textarea id="p2Obs" rows="2" placeholder="Observaciones patrulla 2..."></textarea>
+                </div>
+              </div>
+
+              <div class="g-section g-span-2">
+                <div class="g-section-title">Personal</div>
+                <div class="g-section-body">
+                  <div id="p2Personal" class="list"></div>
+                </div>
+              </div>
+
+              <div class="g-section g-span-2">
+                <div class="g-section-title">Móvil/es</div>
+                <div class="g-section-body">
+                  <div id="p2Moviles" class="list"></div>
+                </div>
+              </div>
+
+              <div class="g-section g-span-2">
+                <div class="g-section-title">Elementos</div>
+                <div class="g-section-body">
+                  <div id="p2Elementos" class="list"></div>
+                </div>
+              </div>
+
+              <div class="g-section g-span-2">
+                <div class="g-section-title">Cartuchos (solo si hay escopeta)</div>
+                <div class="g-section-body">
+                  <div id="p2Cartuchos" class="list"></div>
+                </div>
+              </div>
+
+            </div>
+          </section>
+
+          <!-- PREVIEW JSON -->
+          <div class="g-preview">
+            <div class="g-section-title">Salida JSON (preview)</div>
+            <pre id="guardiaJsonPreview" class="json-preview">{}</pre>
+          </div>
+
         </div>
-
-        <!-- Subsolapas -->
-        <div class="row" style="margin-top:10px;">
-          <button type="button" class="subtab-btn is-active" data-subtab="p1">Patrulla 1</button>
-          <button type="button" class="subtab-btn" data-subtab="p2">Patrulla 2</button>
-        </div>
-
-        <!-- PATRULLA 1 -->
-        <section id="patrulla-p1" class="subtab-panel is-active" style="margin-top:10px;">
-          <h3>Patrulla 1</h3>
-
-          <div class="row" style="margin-top:8px;">
-            <button type="button" class="btn-primary" data-accion="Ingreso" data-p="p1">Ingreso</button>
-            <button type="button" class="btn-ghost" data-accion="Retiro" data-p="p1">Retiro</button>
-            <button type="button" class="btn-ghost" data-accion="Presente" data-p="p1">Presente</button>
-            <button type="button" class="btn-ghost" data-accion="Franco" data-p="p1">Franco</button>
-            <button type="button" class="btn-ghost" data-accion="Constancia" data-p="p1">Constancia</button>
-          </div>
-
-          <label class="top-label">Lugar / QTH</label>
-          <select id="p1Lugar">
-            <option value="">Seleccionar</option>
-          </select>
-
-          <label>Observaciones</label>
-          <textarea id="p1Obs" rows="2" placeholder="Observaciones patrulla 1..."></textarea>
-
-          <h4 style="margin-top:14px;">Personal</h4>
-          <div id="p1Personal" class="list"></div>
-
-          <h4 style="margin-top:14px;">Móvil/es</h4>
-          <div id="p1Moviles" class="list"></div>
-
-          <h4 style="margin-top:14px;">Elementos</h4>
-          <div id="p1Elementos" class="list"></div>
-
-          <h4 style="margin-top:14px;">Cartuchos (solo si hay escopeta)</h4>
-          <div id="p1Cartuchos" class="list"></div>
-        </section>
-
-        <!-- PATRULLA 2 -->
-        <section id="patrulla-p2" class="subtab-panel" style="margin-top:10px; display:none;">
-          <h3>Patrulla 2</h3>
-
-          <div class="row" style="margin-top:8px;">
-            <button type="button" class="btn-primary" data-accion="Ingreso" data-p="p2">Ingreso</button>
-            <button type="button" class="btn-ghost" data-accion="Retiro" data-p="p2">Retiro</button>
-            <button type="button" class="btn-ghost" data-accion="Presente" data-p="p2">Presente</button>
-            <button type="button" class="btn-ghost" data-accion="Franco" data-p="p2">Franco</button>
-            <button type="button" class="btn-ghost" data-accion="Constancia" data-p="p2">Constancia</button>
-          </div>
-
-          <label class="top-label">Lugar / QTH</label>
-          <select id="p2Lugar">
-            <option value="">Seleccionar</option>
-          </select>
-
-          <label>Observaciones</label>
-          <textarea id="p2Obs" rows="2" placeholder="Observaciones patrulla 2..."></textarea>
-
-          <h4 style="margin-top:14px;">Personal</h4>
-          <div id="p2Personal" class="list"></div>
-
-          <h4 style="margin-top:14px;">Móvil/es</h4>
-          <div id="p2Moviles" class="list"></div>
-
-          <h4 style="margin-top:14px;">Elementos</h4>
-          <div id="p2Elementos" class="list"></div>
-
-          <h4 style="margin-top:14px;">Cartuchos (solo si hay escopeta)</h4>
-          <div id="p2Cartuchos" class="list"></div>
-        </section>
-
-        <h3 style="margin-top:14px;">Salida JSON (preview)</h3>
-        <pre id="guardiaJsonPreview" class="json-preview">{}</pre>
       </section>
 
-      <!-- TAB: INVENTARIO -->
-      <section id="tab-inventario" class="tab-panel">
-        <h2>Inventario</h2>
-        <p class="muted">Base de personal/móviles/elementos. Se renderiza dentro de este contenedor.</p>
-        <div id="inventarioRoot"></div>
-      </section>
-
-      <!-- TAB: LIBRO MEMORÁNDUM -->
-      <section id="tab-libro" class="tab-panel">
-        <h2>Libro memorándum</h2>
-        <p class="muted">Asientos en 3 columnas. Importa acciones desde Guardia para semi-automatizar.</p>
-
-        <div class="row" style="margin-top:0;">
-          <button type="button" id="btnLibroImportarGuardia" class="btn-ghost">Importar desde Guardia</button>
-        </div>
-
-        <div class="grid-3col">
-          <div>
-            <label class="top-label">Causa</label>
-            <select id="libroCausa">
-              <option value="">Seleccionar</option>
-              <option value="Ingreso">Ingreso</option>
-              <option value="Retiro">Retiro</option>
-              <option value="Presente">Presente</option>
-              <option value="Franco">Franco</option>
-              <option value="Constancia">Constancia</option>
-            </select>
-          </div>
-
-          <div>
-            <label class="top-label">Hora</label>
-            <input id="libroHora" type="time" />
-          </div>
-
-          <div>
-            <label class="top-label">Novedad / Referencia</label>
-            <textarea
-              id="libroNovedad"
-              rows="3"
-              placeholder="Ej: Móvil 10139 a cargo del Oficial Cardozo junto al Suboficial Aquino."
-            ></textarea>
-          </div>
-        </div>
-
-        <div class="row-actions">
-          <button type="button" id="btnLibroAgregar" class="btn-primary">Agregar</button>
-          <button type="button" id="btnLibroLimpiar" class="btn-ghost">Limpiar</button>
-        </div>
-
-        <h3>Últimos asientos</h3>
-        <div class="table-wrap">
-          <table class="table">
-            <thead>
-              <tr>
-                <th>Causa</th>
-                <th>Hora</th>
-                <th>Novedad / Referencia</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="libroTbody">
-              <tr><td colspan="4" class="muted">Sin asientos todavía.</td></tr>
-            </tbody>
-          </table>
-        </div>
-
-        <h3>Salida JSON (preview)</h3>
-        <pre id="libroJsonPreview" class="json-preview">{}</pre>
-      </section>
-
-    </section>
 
     <!-- shared scripts (orden correcto) -->
     <script src="../funciones/js/storage.js"></script>
@@ -262,5 +261,6 @@
   </div>
 </body>
 </html>
+
 
 
