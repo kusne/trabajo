@@ -43,6 +43,7 @@ function getSubgrupoLabel(meta) {
 }
 
 function groupElementosBySubgrupo(elementoValues = []) {
+  // agrupa por subgrupo canonical
   const map = new Map();
   elementoValues.forEach((val) => {
     const meta = invActivos("elemento").find((x) => x.value === val)?.meta || {};
@@ -51,6 +52,7 @@ function groupElementosBySubgrupo(elementoValues = []) {
     map.get(label).push(val);
   });
 
+  // orden por SUBGRUPOS_ORDEN (lo que no está, al final)
   const keys = Array.from(map.keys());
   keys.sort((a, b) => {
     const ia = SUBGRUPOS_ORDEN.indexOf(a);
@@ -74,6 +76,94 @@ function readCheckedValues(container) {
     .filter(Boolean);
 }
 
+
+// ======================================================
+// ✅ EXCLUSIVIDAD ENTRE PATRULLAS
+// Si un recurso (personal / móvil / elemento) está usado en P1,
+// queda bloqueado (no editable) en P2 y viceversa.
+// El bloqueo es SOLO de UI (no se duplica en el estado).
+// ======================================================
+
+function setOf(arr) {
+  return new Set(Array.isArray(arr) ? arr : []);
+}
+
+function applyChipLocks(container, lockedSet, ownSelectedSet) {
+  if (!container) return;
+  const chips = Array.from(container.querySelectorAll(".chip"));
+  chips.forEach((chip) => {
+    const val = chip.getAttribute("data-value") || chip.querySelector('input[type="checkbox"][data-value]')?.getAttribute("data-value");
+    if (!val) return;
+    const input = chip.querySelector('input[type="checkbox"][data-value]');
+    const locked = lockedSet.has(val) && !ownSelectedSet.has(val);
+    if (input) input.disabled = locked;
+    chip.classList.toggle("is-locked", locked);
+  });
+}
+
+function applyMovilLocks(container, lockedSet, ownSelectedSet) {
+  if (!container) return;
+  const rows = Array.from(container.querySelectorAll(".row-inline"));
+  rows.forEach((row) => {
+    const chk = row.querySelector('input[type="checkbox"][data-value]');
+    const val = chk?.getAttribute("data-value");
+    if (!val) return;
+
+    const locked = lockedSet.has(val) && !ownSelectedSet.has(val);
+
+    // bloquear selección principal
+    if (chk) chk.disabled = locked;
+
+    // bloquear flags + obs (y reset si está bloqueado)
+    const obs = row.querySelector('input[type="text"]');
+    if (obs) obs.disabled = locked || !chk?.checked;
+
+    row.querySelectorAll('input[type="checkbox"][data-flag]').forEach((c) => {
+      c.disabled = locked || !chk?.checked;
+      if (locked) c.checked = false;
+    });
+
+    if (locked) {
+      // si estaba seleccionado del lado incorrecto, forzar deselección
+      if (chk && chk.checked && !ownSelectedSet.has(val)) {
+        chk.checked = false;
+      }
+      if (obs) obs.value = "";
+    }
+
+    row.classList.toggle("is-locked", locked);
+  });
+}
+
+function enforceExclusiveOnValue({ kind, sourceP, value, p1Containers, p2Containers }) {
+  // kind: "chip" | "movil"
+  if (!value) return;
+
+  const other = sourceP === "p1" ? "p2" : "p1";
+  const targets = other === "p1" ? p1Containers : p2Containers;
+
+  if (kind === "chip") {
+    const otherContainer = targets.container;
+    if (!otherContainer) return;
+
+    const input = otherContainer.querySelector(`input[type="checkbox"][data-value="${CSS.escape(value)}"]`);
+    if (input && input.checked) {
+      input.checked = false;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  }
+
+  if (kind === "movil") {
+    const otherContainer = targets.container;
+    if (!otherContainer) return;
+
+    const chk = otherContainer.querySelector(`input[type="checkbox"][data-value="${CSS.escape(value)}"]`);
+    if (chk && chk.checked) {
+      chk.checked = false;
+      chk.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  }
+}
 function renderChips(container, items, checkedValues = []) {
   if (!container) return;
   container.innerHTML = "";
@@ -81,6 +171,9 @@ function renderChips(container, items, checkedValues = []) {
     const id = `chk_${slugifyValue(it.value)}_${Math.random().toString(16).slice(2)}`;
     const wrap = document.createElement("label");
     wrap.className = "chip";
+
+    // data-value en el contenedor chip (para locks cross-patrulla)
+    wrap.setAttribute("data-value", it.value);
 
     const chk = document.createElement("input");
     chk.type = "checkbox";
@@ -97,138 +190,44 @@ function renderChips(container, items, checkedValues = []) {
   });
 }
 
-/* ======================================================
-   ✅ MOVILES (con Libro/TVF por retiro + número a la izquierda)
-   Guardado: { movil_id, obs, libro, tvf }
-   ====================================================== */
-
 function renderMoviles(container, items, selected = []) {
   if (!container) return;
   container.innerHTML = "";
 
-  // normaliza selected (compat: viejos sin libro/tvf)
-  const selectedMap = new Map(
-    (Array.isArray(selected) ? selected : []).map((x) => [
-      x?.movil_id,
-      {
-        movil_id: x?.movil_id,
-        obs: (x?.obs || "").trim(),
-        libro: !!x?.libro,
-        tvf: !!x?.tvf,
-      },
-    ])
-  );
-
-  function mkFlag(labelTxt, dataFlag, checked, disabled) {
-    // OJO: uso label para click fácil, pero lo “anulo” para que no lo pise tu CSS global de label
-    const wrap = document.createElement("label");
-    wrap.className = "mov-flag";
-    // ✅ fuerza inline (mata display:block y márgenes globales)
-    wrap.style.display = "inline-flex";
-    wrap.style.alignItems = "center";
-    wrap.style.gap = "6px";
-    wrap.style.margin = "0";
-    wrap.style.padding = "0";
-    wrap.style.fontWeight = "600";
-    wrap.style.cursor = "pointer";
-    wrap.style.userSelect = "none";
-
-    const c = document.createElement("input");
-    c.type = "checkbox";
-    c.checked = !!checked;
-    c.disabled = !!disabled;
-    c.setAttribute("data-flag", dataFlag);
-    c.style.width = "auto";
-    c.style.margin = "0";
-
-    const t = document.createElement("span");
-    t.textContent = labelTxt;
-
-    wrap.appendChild(c);
-    wrap.appendChild(t);
-    return wrap;
-  }
+  // un móvil seleccionado = { movil_id, obs }
+  const selectedIds = new Set(selected.map((x) => x.movil_id));
 
   items.forEach((it) => {
     const row = document.createElement("div");
     row.className = "row-inline";
 
-    // ✅ fuerza layout SIEMPRE: [chk] [NUM] [Libro TVF] [Obs...]
-    row.style.display = "flex";
-    row.style.alignItems = "center";
-    row.style.gap = "10px";
-    row.style.flexWrap = "nowrap";
-
     const id = `mov_${slugifyValue(it.value)}_${Math.random().toString(16).slice(2)}`;
 
-    const saved = selectedMap.get(it.value) || { movil_id: it.value, obs: "", libro: false, tvf: false };
-    const isSelected = selectedMap.has(it.value);
-
-    // checkbox principal
     const chk = document.createElement("input");
     chk.type = "checkbox";
     chk.id = id;
-    chk.checked = isSelected;
+    chk.checked = selectedIds.has(it.value);
     chk.setAttribute("data-value", it.value);
-    chk.style.width = "auto";
-    chk.style.margin = "0";
 
-    // ✅ número/nombre del móvil (SPAN, NO label) para que tu CSS global no lo vuelva block
-    const name = document.createElement("span");
-    name.className = "movil-name";
-    name.textContent = it.label;
+    const label = document.createElement("label");
+    label.setAttribute("for", id);
+    label.textContent = it.label;
 
-    // ✅ forzado: queda pegado al checkbox, sin ocupar el centro
-    name.style.display = "inline-flex";
-    name.style.alignItems = "center";
-    name.style.margin = "0";
-    name.style.padding = "0";
-    name.style.fontWeight = "800";
-    name.style.whiteSpace = "nowrap";
-    name.style.flex = "0 0 auto";
-    name.style.minWidth = "72px"; // ajustable si querés
-
-    // flags (Libro/TVF) a la derecha del número
-    const flags = document.createElement("div");
-    flags.className = "mov-flags";
-    flags.style.display = "flex";
-    flags.style.alignItems = "center";
-    flags.style.gap = "10px";
-    flags.style.flex = "0 0 auto";
-
-    const flagLibro = mkFlag("Libro", "libro", saved.libro, !chk.checked);
-    const flagTvf = mkFlag("TVF", "tvf", saved.tvf, !chk.checked);
-
-    flags.appendChild(flagLibro);
-    flags.appendChild(flagTvf);
-
-    // obs a la derecha del todo
     const obs = document.createElement("input");
     obs.type = "text";
     obs.placeholder = "Obs (opcional)";
     obs.className = "mini";
-    obs.value = saved.obs || "";
+    const found = selected.find((x) => x.movil_id === it.value);
+    obs.value = found?.obs || "";
     obs.disabled = !chk.checked;
-    obs.style.marginLeft = "auto"; // ✅ empuja Obs al extremo derecho
 
-    const syncEnabled = () => {
-      const enabled = chk.checked;
-
-      obs.disabled = !enabled;
-      if (!enabled) obs.value = "";
-
-      flags.querySelectorAll('input[type="checkbox"][data-flag]').forEach((c) => {
-        c.disabled = !enabled;
-        if (!enabled) c.checked = false;
-      });
-    };
-
-    chk.addEventListener("change", syncEnabled);
-    syncEnabled();
+    chk.addEventListener("change", () => {
+      obs.disabled = !chk.checked;
+      if (!chk.checked) obs.value = "";
+    });
 
     row.appendChild(chk);
-    row.appendChild(name);
-    row.appendChild(flags);
+    row.appendChild(label);
     row.appendChild(obs);
 
     container.appendChild(row);
@@ -239,31 +238,20 @@ function readMoviles(container) {
   if (!container) return [];
   const rows = Array.from(container.querySelectorAll(".row-inline"));
   const out = [];
-
   rows.forEach((row) => {
-    const chk = row.querySelector('input[type="checkbox"][data-value]');
-    if (!chk?.checked) return;
-
-    const movil_id = chk.getAttribute("data-value");
-
-    const obs = row.querySelector('input[type="text"]');
-    const libro = row.querySelector('input[type="checkbox"][data-flag="libro"]');
-    const tvf = row.querySelector('input[type="checkbox"][data-flag="tvf"]');
-
-    out.push({
-      movil_id,
-      obs: (obs?.value || "").trim(),
-      libro: !!libro?.checked,
-      tvf: !!tvf?.checked,
-    });
+    const chk = row.querySelector("input[type=checkbox][data-value]");
+    const obs = row.querySelector("input[type=text]");
+    if (chk?.checked) {
+      out.push({ movil_id: chk.getAttribute("data-value"), obs: (obs?.value || "").trim() });
+    }
   });
-
   return out;
 }
 
 function aplicarReglaCartuchos(elementosContainer, cartuchosContainer, precomputedElementosIds = null) {
   if (!elementosContainer || !cartuchosContainer) return;
 
+  // Si hay escopetas seleccionadas => habilitar cartuchos
   const elementosIds = precomputedElementosIds || readCheckedValues(elementosContainer);
   const hayEscopeta = elementosIds.some((id) => {
     const label = invLabelFromValue("elemento", id).toLowerCase();
@@ -271,6 +259,7 @@ function aplicarReglaCartuchos(elementosContainer, cartuchosContainer, precomput
   });
 
   cartuchosContainer.style.display = hayEscopeta ? "block" : "none";
+  // si no hay escopeta, desmarcar todo
   if (!hayEscopeta) {
     cartuchosContainer.querySelectorAll("input[type=checkbox]").forEach((c) => (c.checked = false));
   }
@@ -323,6 +312,12 @@ function formatLogEntry(e) {
   return `${ts} ${p} ${a}: ${r}`;
 }
 
+/**
+ * Parser de lugares desde el textarea #franjas (Órdenes)
+ * Acepta líneas tipo:
+ * "07 a 11 hs - RN168 km18 - Control vehicular"
+ * y variantes con guiones.
+ */
 function getLugaresFromFranjasTextarea() {
   const t = document.getElementById("franjas")?.value || "";
   const out = new Set();
@@ -344,6 +339,9 @@ function getLugaresFromFranjasTextarea() {
   return Array.from(out).sort((a, b) => a.localeCompare(b));
 }
 
+/**
+ * Lugares desde state.ordenes (si existen)
+ */
 function getLugaresFromOrdenes() {
   const out = new Set();
   const ords = Array.isArray(state?.ordenes) ? state.ordenes : [];
@@ -357,6 +355,11 @@ function getLugaresFromOrdenes() {
   return Array.from(out).sort((a, b) => a.localeCompare(b));
 }
 
+/**
+ * ✅ NUEVO: leer TODAS las órdenes guardadas (aunque no estén seleccionadas)
+ * 1) intenta métodos de storageApp
+ * 2) si no existen, intenta localStorage keys comunes
+ */
 function tryGetOrdenesFromStorageApp() {
   try {
     const sa = window.storageApp;
@@ -367,7 +370,14 @@ function tryGetOrdenesFromStorageApp() {
       if (Array.isArray(sa.ordenes)) return sa.ordenes || [];
     }
 
-    const keys = ["ordenes_operacionales", "ordenesOperacionales", "ordenes", "orders", "ordenes_storage"];
+    // fallback suave a localStorage (keys típicas; si no están, no rompe)
+    const keys = [
+      "ordenes_operacionales",
+      "ordenesOperacionales",
+      "ordenes",
+      "orders",
+      "ordenes_storage",
+    ];
 
     for (const k of keys) {
       const raw = localStorage.getItem(k);
@@ -385,6 +395,12 @@ function tryGetOrdenesFromStorageApp() {
   }
 }
 
+/**
+ * ✅ NUEVO: extraer lugares desde un array de órdenes guardadas
+ * Soporta:
+ * - o.franjas[] con { lugar }
+ * - o.franjasTexto / o.franjas_texto (string con líneas HORARIO - LUGAR - TITULO)
+ */
 function extractLugaresFromOrdenesArray(ords) {
   const out = new Set();
 
@@ -414,6 +430,12 @@ function extractLugaresFromOrdenesArray(ords) {
   return Array.from(out).sort((a, b) => a.localeCompare(b));
 }
 
+/**
+ * ✅ NUEVO: lugares SMART
+ * 1) usa state.ordenes si tiene data
+ * 2) si no, usa TODAS las órdenes guardadas (storageApp / localStorage)
+ * 3) si no, usa #franjas
+ */
 function getLugaresSmart() {
   const fromState = getLugaresFromOrdenes();
   if (fromState.length) return fromState;
@@ -429,6 +451,7 @@ function getLugaresSmart() {
 }
 
 export function initGuardia({ sb, subtabs } = {}) {
+  // ===== DOM refs (tolerantes) =====
   const elEstadoTxt = () => document.getElementById("guardiaEstadoTxt");
   const elPreview = () => document.getElementById("guardiaJsonPreview");
 
@@ -451,6 +474,32 @@ export function initGuardia({ sb, subtabs } = {}) {
 
   let guardiaState = state?.guardia || null;
 
+
+  // === Exclusividad cross-patrulla (UI) ===
+  function aplicarExclusividadUI() {
+    // leer selección actual desde UI (no desde estado) para no pisar cambios
+    const p1Pers = setOf(readCheckedValues(p1Personal));
+    const p2Pers = setOf(readCheckedValues(p2Personal));
+
+    const p1Elem = setOf(readCheckedValues(p1Elementos));
+    const p2Elem = setOf(readCheckedValues(p2Elementos));
+
+    const p1Mov = readMoviles(p1Moviles).map((x) => x.movil_id);
+    const p2Mov = readMoviles(p2Moviles).map((x) => x.movil_id);
+    const p1MovSet = setOf(p1Mov);
+    const p2MovSet = setOf(p2Mov);
+
+    // locks: lo usado en la otra patrulla
+    applyChipLocks(p1Personal, p2Pers, p1Pers);
+    applyChipLocks(p2Personal, p1Pers, p2Pers);
+
+    applyChipLocks(p1Elementos, p2Elem, p1Elem);
+    applyChipLocks(p2Elementos, p1Elem, p2Elem);
+
+    applyMovilLocks(p1Moviles, p2MovSet, p1MovSet);
+    applyMovilLocks(p2Moviles, p1MovSet, p2MovSet);
+  }
+
   function setEstado(s) {
     const el = elEstadoTxt();
     if (el) el.textContent = s || "";
@@ -471,14 +520,17 @@ export function initGuardia({ sb, subtabs } = {}) {
   }
 
   function renderGuardiaDesdeInventario() {
+    // ✅ Lugares SMART
     const lugares = getLugaresSmart();
     fillSelectOptions(p1Lugar, lugares, guardiaState?.patrullas?.p1?.lugar || "");
     fillSelectOptions(p2Lugar, lugares, guardiaState?.patrullas?.p2?.lugar || "");
 
+    // Inventario activo
     const pers = invActivos("personal");
     const movs = invActivos("movil");
     const elems = invActivos("elemento");
 
+    // Estado actual
     const p1 = guardiaState?.patrullas?.p1 || {};
     const p2 = guardiaState?.patrullas?.p2 || {};
 
@@ -488,6 +540,7 @@ export function initGuardia({ sb, subtabs } = {}) {
     renderMoviles(p1Moviles, movs, p1.moviles || []);
     renderMoviles(p2Moviles, movs, p2.moviles || []);
 
+    // Elementos con agrupación y orden fijo
     const p1Elems = p1.elementos_ids || [];
     const p2Elems = p2.elementos_ids || [];
 
@@ -518,20 +571,26 @@ export function initGuardia({ sb, subtabs } = {}) {
     renderElementosGrouped(p1Elementos, p1Elems, groups1);
     renderElementosGrouped(p2Elementos, p2Elems, groups2);
 
+    // Cartuchos (visible si hay escopeta)
     renderCartuchos(p1Cartuchos, p1.cartuchos_map || {});
     renderCartuchos(p2Cartuchos, p2.cartuchos_map || {});
 
     aplicarReglaCartuchos(p1Elementos, p1Cartuchos, p1Elems);
     aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2Elems);
 
+    // Obs
     if (p1Obs) p1Obs.value = p1.obs || "";
     if (p2Obs) p2Obs.value = p2.obs || "";
+
+    // ✅ aplicar locks cross-patrulla luego de pintar
+    aplicarExclusividadUI();
   }
 
   function aplicarStateAGuardiaUI() {
     guardiaState = state?.guardia || guardiaState || null;
     renderGuardiaDesdeInventario();
     renderGuardiaPreview();
+    aplicarExclusividadUI();
 
     const logLen = Array.isArray(guardiaState?.log) ? guardiaState.log.length : 0;
     setEstado(logLen ? `OK · Logs: ${logLen}` : "OK");
@@ -629,6 +688,7 @@ export function initGuardia({ sb, subtabs } = {}) {
     guardiaState = state?.guardia || payload || guardiaState;
     renderGuardiaDesdeInventario();
     renderGuardiaPreview();
+    aplicarExclusividadUI();
     setEstado(payload ? "Actualizado" : "Sin datos");
 
     if (typeof invLoad === "function") {
@@ -697,6 +757,11 @@ export function initGuardia({ sb, subtabs } = {}) {
     hook(p2Elementos, p2Cartuchos);
   }
 
+  /**
+   * refrescar lugares cuando se GUARDA una orden (botón guardar órdenes)
+   * - Caso 1: botón con onclick="agregarOrden()"
+   * - Caso 2: hook al wrapper global window.agregarOrden (sin romper nada)
+   */
   function bindRefrescoPorGuardarOrden() {
     const btnGuardarOrden =
       document.querySelector('button[onclick*="agregarOrden"]') ||
@@ -748,8 +813,11 @@ export function initGuardia({ sb, subtabs } = {}) {
 
     bindAccionesEstado();
     bindReglaCartuchosLive();
+
+    // refresco automático al guardar una orden
     bindRefrescoPorGuardarOrden();
 
+    // Re-render UI cuando cambia inventario
     subscribeInventario(() => {
       renderGuardiaDesdeInventario();
       renderGuardiaPreview();
@@ -764,6 +832,7 @@ export function initGuardia({ sb, subtabs } = {}) {
     await onActualizarGuardia({ invLoad });
     renderGuardiaDesdeInventario();
     renderGuardiaPreview();
+    aplicarExclusividadUI();
     setEstado("OK");
   }
 
