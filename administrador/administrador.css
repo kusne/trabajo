@@ -458,9 +458,12 @@ textarea{
    ====================================================== */
 
 :root{
-  --soft-blue-bg: rgba(59,130,246,.14);
-  --soft-blue-bd: rgba(59,130,246,.32);
-  --soft-blue-tx: rgba(30,64,175,.95);
+  /* ✅ NUEVAS: rojo suave (selección) */
+  --soft-red-bg: rgba(220,38,38,.14);
+  --soft-red-bd: rgba(220,38,38,.32);
+
+  /* ✅ texto “negro” suave (no azul) */
+  --soft-black-tx: rgba(15,23,42,.92);
 
   --soft-cyan-bg: rgba(14,165,233,.14);
   --soft-cyan-bd: rgba(14,165,233,.30);
@@ -483,17 +486,7 @@ textarea{
   --soft-gray-tx: rgba(15,23,42,.92);
 
   --soft-shadow: 0 10px 22px rgba(0,0,0,.08);
-  :root{
-  /* ...tus variables actuales... */
-
-  /* ✅ NUEVAS: rojo suave (selección) */
-  --soft-red-bg: rgba(220,38,38,.14);
-  --soft-red-bd: rgba(220,38,38,.32);
-
-  /* ✅ texto “negro” suave (no azul) */
-  --soft-black-tx: rgba(15,23,42,.92);
-}
-
+ 
 }
 
 /* Micro-animaciones (solo Guardia) */
@@ -644,6 +637,7 @@ textarea{
   border-color: rgba(94, 80, 63, .38);
   box-shadow: 0 0 0 4px rgba(94, 80, 63, .14);
 }
+
 
 
 
