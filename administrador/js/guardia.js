@@ -100,7 +100,7 @@ function renderChips(container, items, checkedValues = []) {
 }
 
 /* ======================================================
-   ✅ MOVILES (con Libro/TVF por retiro + label a la izquierda)
+   ✅ MOVILES (con Libro/TVF por retiro + número a la izquierda)
    Estructura guardada:
    { movil_id, obs, libro, tvf }
    ====================================================== */
@@ -124,7 +124,7 @@ function renderMoviles(container, items, selected = []) {
 
   function mkFlag(labelTxt, dataFlag, checked, disabled) {
     const wrap = document.createElement("label");
-    wrap.className = "mov-flag"; // (css opcional)
+    wrap.className = "mov-flag";
 
     const c = document.createElement("input");
     c.type = "checkbox";
@@ -142,7 +142,7 @@ function renderMoviles(container, items, selected = []) {
 
   items.forEach((it) => {
     const row = document.createElement("div");
-    row.className = "row-inline";
+    row.className = "row-inline movil-row";
 
     const id = `mov_${slugifyValue(it.value)}_${Math.random().toString(16).slice(2)}`;
 
@@ -156,13 +156,19 @@ function renderMoviles(container, items, selected = []) {
     chk.checked = isSelected;
     chk.setAttribute("data-value", it.value);
 
-    // ✅ label/número del móvil a la izquierda (con flex)
-    const name = document.createElement("label");
-    name.setAttribute("for", id);
+    // ✅ CAMBIO CLAVE: el número/nombre YA NO es <label> (para que no lo rompa tu CSS global)
+    const name = document.createElement("span");
     name.className = "movil-name";
     name.textContent = it.label;
 
-    // flags (Libro / TVF) a la derecha
+    // clic en el número => tilda/destilda
+    name.style.cursor = "pointer";
+    name.addEventListener("click", () => {
+      chk.checked = !chk.checked;
+      chk.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    // flags (Libro / TVF) a la derecha del número
     const flags = document.createElement("div");
     flags.className = "mov-flags";
 
@@ -196,8 +202,8 @@ function renderMoviles(container, items, selected = []) {
     chk.addEventListener("change", () => syncEnabled());
     syncEnabled();
 
-    // Orden final en la fila:
-    // [chk] [NOMBRE IZQ] [flags der] [obs der]
+    // Orden final:
+    // [chk] [NUMERO IZQ] [flags] [obs der]
     row.appendChild(chk);
     row.appendChild(name);
     row.appendChild(flags);
@@ -339,13 +345,7 @@ function tryGetOrdenesFromStorageApp() {
       if (Array.isArray(sa.ordenes)) return sa.ordenes || [];
     }
 
-    const keys = [
-      "ordenes_operacionales",
-      "ordenesOperacionales",
-      "ordenes",
-      "orders",
-      "ordenes_storage",
-    ];
+    const keys = ["ordenes_operacionales", "ordenesOperacionales", "ordenes", "orders", "ordenes_storage"];
 
     for (const k of keys) {
       const raw = localStorage.getItem(k);
@@ -467,7 +467,7 @@ export function initGuardia({ sb, subtabs } = {}) {
     renderChips(p1Personal, pers, p1.personal_ids || []);
     renderChips(p2Personal, pers, p2.personal_ids || []);
 
-    // ✅ Moviles con {libro,tvf}
+    // ✅ Moviles con {libro,tvf} + número a la izquierda
     renderMoviles(p1Moviles, movs, p1.moviles || []);
     renderMoviles(p2Moviles, movs, p2.moviles || []);
 
@@ -527,7 +527,6 @@ export function initGuardia({ sb, subtabs } = {}) {
     const p1PersonalIds = readCheckedValues(p1Personal);
     const p2PersonalIds = readCheckedValues(p2Personal);
 
-    // ✅ ahora devuelve {movil_id, obs, libro, tvf}
     const p1Mov = readMoviles(p1Moviles);
     const p2Mov = readMoviles(p2Moviles);
 
@@ -647,10 +646,7 @@ export function initGuardia({ sb, subtabs } = {}) {
 
         const pat = next.patrullas[p];
         const perTxt = (pat.personal_ids || []).map((id) => invLabelFromValue("personal", id)).join(", ");
-
-        // ✅ incluir libro/tvf en texto si querés (por ahora no lo agrego para no ensuciar)
         const movTxt = (pat.moviles || []).map((m) => invLabelFromValue("movil", m.movil_id)).join(", ");
-
         const elemTxt = (pat.elementos_ids || []).map((id) => invLabelFromValue("elemento", id)).join(", ");
 
         const resumen = `Personal: ${perTxt || "-"} | Movil(es): ${movTxt || "-"} | Elementos: ${elemTxt || "-"}`;
