@@ -1,77 +1,109 @@
-// administrador.js (RESTORE ENTRYPOINT)
-// Objetivo: volver a dejar funcional el cambio de solapas y la inicialización modular
-// sin depender de rutas ./js/* inexistentes.
-//
-// NOTA: este archivo asume que están en la MISMA carpeta:
-// - tabs.js, guardia.js, inventario.js, libroMemorandum.js, subtabsPatrullas.js, supabaseClient.js
-// y que config.js + utils.js existen (los usan los módulos).
+// administrador/administrador.js (ENTRYPOINT MODULAR)
+// - Importa Supabase client desde ./js (NO desde ../funciones)
+// - Inicializa auth + tabs + módulos (ordenes/guardia/inventario/libro)
+// - Mantiene puentes globales para onclick legacy
 
-import { createSupabaseClient } from "./supabaseClient.js";
-import { initTabs } from "./tabs.js";
-import { createSubtabsPatrullas } from "./subtabsPatrullas.js";
+import { createSupabaseClient } from "./js/supabaseClient.js";
 
-import { initGuardia } from "./guardia.js";
-import { initInventario } from "./inventario.js";
-import { initLibroMemorandum } from "./libroMemorandum.js";
+import { initAuth } from "./js/auth.js";
+import { initTabs } from "./js/tabs.js";
 
-(function () {
-  // Puentes globales (no tocamos lógica legacy: solo avisos si algo falta)
-  window.agregarOrden = window.agregarOrden || function () {
-    alert("Función agregarOrden() no está cargada. Revisá scripts legacy de Órdenes.");
-  };
+import { initOrdenes } from "./js/ordenes.js";
+import { initGuardia } from "./js/guardia.js";
+import { initInventario } from "./js/inventario.js";
+import { initLibroMemorandum } from "./js/libroMemorandum.js";
 
-  window.publicarOrdenes = window.publicarOrdenes || function () {
-    alert("Función publicarOrdenes() no está cargada. Revisá scripts legacy de Órdenes.");
-  };
+// Subsolapas Patrullas (P1/P2)
+import { createSubtabsPatrullas } from "./js/subtabsPatrullas.js";
 
-  window.importarLibroMemorandum = window.importarLibroMemorandum || function () {
-    // si libroMemorandum.js expone import, lo engancha él; esto evita error si alguien lo llama
-    console.warn("importarLibroMemorandum() aún no inicializado.");
-  };
+// ===============================
+// Puentes globales (compat HTML)
+// ===============================
+window.agregarOrden = function () {
+  if (typeof window.__adm_agregarOrden === "function") return window.__adm_agregarOrden();
+  alert("ADM no inicializó agregarOrden. Ctrl+F5 y revisá consola.");
+};
 
-  document.addEventListener("DOMContentLoaded", async () => {
-    // 1) Supabase client (si no hay sesión, los módulos lo manejarán con sus alerts)
+window.publicarOrdenes = function () {
+  if (typeof window.__adm_publicarOrdenes === "function") return window.__adm_publicarOrdenes();
+  alert("ADM no inicializó publicarOrdenes. Ctrl+F5 y revisá consola.");
+};
+
+window.eliminarOrden = function () {
+  if (typeof window.__adm_eliminarOrden === "function") return window.__adm_eliminarOrden();
+  alert("ADM no inicializó eliminarOrden. Ctrl+F5 y revisá consola.");
+};
+
+console.log("[ADM] entrypoint administrador.js cargado OK");
+
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
     const sb = createSupabaseClient();
 
-    // 2) Subsolapas Patrulla 1/2
-    const subtabs = createSubtabsPatrullas({
-      rootId: "guardiaSubtabs",
-      panel1Id: "panelPatrulla1",
-      panel2Id: "panelPatrulla2",
-      btn1Sel: '[data-subtab="p1"]',
-      btn2Sel: '[data-subtab="p2"]',
-    });
+    // Tabs (NO asumimos show/hide porque tu tabs.js puede exponer otra API)
+    const tabs = initTabs?.({ defaultTab: "ordenes" }) || null;
 
-    // 3) Guardia / Inventario / Libro
-    const guardia = initGuardia({ sb, subtabs });
-    const inventario = initInventario({ sb });
-    const libro = initLibroMemorandum({ sb });
+    // Subtabs patrullas
+    const subtabs = typeof createSubtabsPatrullas === "function" ? createSubtabsPatrullas() : null;
 
-    // 4) Tabs principales
-    const tabs = initTabs({
-      onGuardiaActivate: () => {
-        // refresca lugares cuando se entra en Guardia
-        try { guardia.refreshLugares?.(); } catch {}
+    // Módulos
+    const ordenes = initOrdenes?.({
+      sb,
+      onOrdenesChanged: () => {
+        // si guardia tiene refresh de lugares, lo llamamos
+        if (typeof guardia?.refreshLugares === "function") guardia.refreshLugares();
       },
     });
 
-    // 5) Bind eventos
-    try { inventario.bind?.(); } catch (e) { console.error(e); }
-    try { guardia.bind?.(); } catch (e) { console.error(e); }
-    try { libro.bind?.(); } catch (e) { console.error(e); }
+    const guardia = initGuardia?.({ sb, subtabs });
+    const inventario = initInventario?.({ sb });
+    const libro = initLibroMemorandum?.({ sb });
 
-    // 6) Init (carga de datos)
-    // Inventario primero (guardia depende del inventario para chips)
-    try { await inventario.init?.(); } catch (e) { console.error(e); }
-    try { await guardia.init?.({ invLoad: inventario.load?.bind(inventario) || null }); } catch (e) { console.error(e); }
-    try { await libro.init?.(); } catch (e) { console.error(e); }
+    // Bind
+    ordenes?.bind?.();
+    guardia?.bind?.();
+    inventario?.bind?.();
+    libro?.bind?.();
 
-    // 7) Tab inicial: Órdenes
-    try { tabs.activarTab?.("ordenes"); } catch {}
+    // Botón eliminar (si existe por id)
+    const btnEliminar = document.getElementById("btnEliminarOrden");
+    if (btnEliminar) {
+      btnEliminar.addEventListener("click", () => window.eliminarOrden());
+    }
 
-    console.log("[ADM] EntryPoint RESTORE OK");
-  });
-})();
+    // Auth
+    const auth = initAuth?.({ sb });
 
+    if (!auth?.init) {
+      throw new Error("auth.js no expone init(). Verificá tu módulo auth.js.");
+    }
 
+    await auth.init({
+      onLoggedIn: async () => {
+        // Si tabs tiene show(), lo usamos. Si no, no rompemos.
+        if (typeof tabs?.show === "function") tabs.show();
 
+        // Inits en orden lógico
+        if (typeof ordenes?.init === "function") await ordenes.init();
+        if (typeof inventario?.init === "function") await inventario.init();
+
+        if (typeof guardia?.init === "function") {
+          const invLoad = inventario?.invLoad;
+          await guardia.init(invLoad ? { invLoad } : undefined);
+        }
+
+        if (typeof libro?.init === "function") await libro.init();
+
+        // Set tab default si tu tabs.js expone activarTab()
+        if (typeof tabs?.activarTab === "function") tabs.activarTab("ordenes");
+      },
+
+      onLoggedOut: () => {
+        if (typeof tabs?.hide === "function") tabs.hide();
+      },
+    });
+  } catch (err) {
+    console.error("[ADM] Error inicializando entrypoint:", err);
+    alert("Error inicializando ADM. Mirá Console (F12).");
+  }
+});
