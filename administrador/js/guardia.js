@@ -203,8 +203,10 @@ function renderMoviles(container, items, selected = [], lockedMap = new Map()) {
     chk.addEventListener("change", syncEnabled);
     syncEnabled();
 
-    row.appendChild(chk);
+    // ✅ UI: el texto/número del móvil va a la IZQUIERDA del tilde principal
+    // Orden visual: [NOMBRE] [chk] [Libro/TVF] [Obs]
     row.appendChild(name);
+    row.appendChild(chk);
     row.appendChild(flags);
     row.appendChild(obs);
 
