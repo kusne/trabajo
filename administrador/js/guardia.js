@@ -43,7 +43,6 @@ function getSubgrupoLabel(meta) {
 }
 
 function groupElementosBySubgrupo(elementoValues = []) {
-  // agrupa por subgrupo canonical
   const map = new Map();
   elementoValues.forEach((val) => {
     const meta = invActivos("elemento").find((x) => x.value === val)?.meta || {};
@@ -52,7 +51,6 @@ function groupElementosBySubgrupo(elementoValues = []) {
     map.get(label).push(val);
   });
 
-  // orden por SUBGRUPOS_ORDEN (lo que no está, al final)
   const keys = Array.from(map.keys());
   keys.sort((a, b) => {
     const ia = SUBGRUPOS_ORDEN.indexOf(a);
@@ -101,8 +99,7 @@ function renderChips(container, items, checkedValues = []) {
 
 /* ======================================================
    ✅ MOVILES (con Libro/TVF por retiro + número a la izquierda)
-   Estructura guardada:
-   { movil_id, obs, libro, tvf }
+   Guardado: { movil_id, obs, libro, tvf }
    ====================================================== */
 
 function renderMoviles(container, items, selected = []) {
@@ -123,14 +120,26 @@ function renderMoviles(container, items, selected = []) {
   );
 
   function mkFlag(labelTxt, dataFlag, checked, disabled) {
+    // OJO: uso label para click fácil, pero lo “anulo” para que no lo pise tu CSS global de label
     const wrap = document.createElement("label");
     wrap.className = "mov-flag";
+    // ✅ fuerza inline (mata display:block y márgenes globales)
+    wrap.style.display = "inline-flex";
+    wrap.style.alignItems = "center";
+    wrap.style.gap = "6px";
+    wrap.style.margin = "0";
+    wrap.style.padding = "0";
+    wrap.style.fontWeight = "600";
+    wrap.style.cursor = "pointer";
+    wrap.style.userSelect = "none";
 
     const c = document.createElement("input");
     c.type = "checkbox";
     c.checked = !!checked;
     c.disabled = !!disabled;
     c.setAttribute("data-flag", dataFlag);
+    c.style.width = "auto";
+    c.style.margin = "0";
 
     const t = document.createElement("span");
     t.textContent = labelTxt;
@@ -142,35 +151,50 @@ function renderMoviles(container, items, selected = []) {
 
   items.forEach((it) => {
     const row = document.createElement("div");
-    row.className = "row-inline movil-row";
+    row.className = "row-inline";
+
+    // ✅ fuerza layout SIEMPRE: [chk] [NUM] [Libro TVF] [Obs...]
+    row.style.display = "flex";
+    row.style.alignItems = "center";
+    row.style.gap = "10px";
+    row.style.flexWrap = "nowrap";
 
     const id = `mov_${slugifyValue(it.value)}_${Math.random().toString(16).slice(2)}`;
 
     const saved = selectedMap.get(it.value) || { movil_id: it.value, obs: "", libro: false, tvf: false };
     const isSelected = selectedMap.has(it.value);
 
-    // checkbox principal (selección del móvil)
+    // checkbox principal
     const chk = document.createElement("input");
     chk.type = "checkbox";
     chk.id = id;
     chk.checked = isSelected;
     chk.setAttribute("data-value", it.value);
+    chk.style.width = "auto";
+    chk.style.margin = "0";
 
-    // ✅ CAMBIO CLAVE: el número/nombre YA NO es <label> (para que no lo rompa tu CSS global)
+    // ✅ número/nombre del móvil (SPAN, NO label) para que tu CSS global no lo vuelva block
     const name = document.createElement("span");
     name.className = "movil-name";
     name.textContent = it.label;
 
-    // clic en el número => tilda/destilda
-    name.style.cursor = "pointer";
-    name.addEventListener("click", () => {
-      chk.checked = !chk.checked;
-      chk.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    // ✅ forzado: queda pegado al checkbox, sin ocupar el centro
+    name.style.display = "inline-flex";
+    name.style.alignItems = "center";
+    name.style.margin = "0";
+    name.style.padding = "0";
+    name.style.fontWeight = "800";
+    name.style.whiteSpace = "nowrap";
+    name.style.flex = "0 0 auto";
+    name.style.minWidth = "72px"; // ajustable si querés
 
-    // flags (Libro / TVF) a la derecha del número
+    // flags (Libro/TVF) a la derecha del número
     const flags = document.createElement("div");
     flags.className = "mov-flags";
+    flags.style.display = "flex";
+    flags.style.alignItems = "center";
+    flags.style.gap = "10px";
+    flags.style.flex = "0 0 auto";
 
     const flagLibro = mkFlag("Libro", "libro", saved.libro, !chk.checked);
     const flagTvf = mkFlag("TVF", "tvf", saved.tvf, !chk.checked);
@@ -178,15 +202,15 @@ function renderMoviles(container, items, selected = []) {
     flags.appendChild(flagLibro);
     flags.appendChild(flagTvf);
 
-    // obs (opcional) a la derecha
+    // obs a la derecha del todo
     const obs = document.createElement("input");
     obs.type = "text";
     obs.placeholder = "Obs (opcional)";
     obs.className = "mini";
     obs.value = saved.obs || "";
     obs.disabled = !chk.checked;
+    obs.style.marginLeft = "auto"; // ✅ empuja Obs al extremo derecho
 
-    // cuando se destilda el móvil: bloquear flags + limpiar
     const syncEnabled = () => {
       const enabled = chk.checked;
 
@@ -199,11 +223,9 @@ function renderMoviles(container, items, selected = []) {
       });
     };
 
-    chk.addEventListener("change", () => syncEnabled());
+    chk.addEventListener("change", syncEnabled);
     syncEnabled();
 
-    // Orden final:
-    // [chk] [NUMERO IZQ] [flags] [obs der]
     row.appendChild(chk);
     row.appendChild(name);
     row.appendChild(flags);
@@ -407,7 +429,6 @@ function getLugaresSmart() {
 }
 
 export function initGuardia({ sb, subtabs } = {}) {
-  // ===== DOM refs (tolerantes) =====
   const elEstadoTxt = () => document.getElementById("guardiaEstadoTxt");
   const elPreview = () => document.getElementById("guardiaJsonPreview");
 
@@ -450,28 +471,23 @@ export function initGuardia({ sb, subtabs } = {}) {
   }
 
   function renderGuardiaDesdeInventario() {
-    // ✅ Lugares SMART
     const lugares = getLugaresSmart();
     fillSelectOptions(p1Lugar, lugares, guardiaState?.patrullas?.p1?.lugar || "");
     fillSelectOptions(p2Lugar, lugares, guardiaState?.patrullas?.p2?.lugar || "");
 
-    // Inventario activo
     const pers = invActivos("personal");
     const movs = invActivos("movil");
     const elems = invActivos("elemento");
 
-    // Estado actual
     const p1 = guardiaState?.patrullas?.p1 || {};
     const p2 = guardiaState?.patrullas?.p2 || {};
 
     renderChips(p1Personal, pers, p1.personal_ids || []);
     renderChips(p2Personal, pers, p2.personal_ids || []);
 
-    // ✅ Moviles con {libro,tvf} + número a la izquierda
     renderMoviles(p1Moviles, movs, p1.moviles || []);
     renderMoviles(p2Moviles, movs, p2.moviles || []);
 
-    // Elementos con agrupación y orden fijo
     const p1Elems = p1.elementos_ids || [];
     const p2Elems = p2.elementos_ids || [];
 
@@ -502,14 +518,12 @@ export function initGuardia({ sb, subtabs } = {}) {
     renderElementosGrouped(p1Elementos, p1Elems, groups1);
     renderElementosGrouped(p2Elementos, p2Elems, groups2);
 
-    // Cartuchos (visible si hay escopeta)
     renderCartuchos(p1Cartuchos, p1.cartuchos_map || {});
     renderCartuchos(p2Cartuchos, p2.cartuchos_map || {});
 
     aplicarReglaCartuchos(p1Elementos, p1Cartuchos, p1Elems);
     aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2Elems);
 
-    // Obs
     if (p1Obs) p1Obs.value = p1.obs || "";
     if (p2Obs) p2Obs.value = p2.obs || "";
   }
