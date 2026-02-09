@@ -610,6 +610,83 @@ textarea{
   background: var(--soft-blue-bg);
   border-color: var(--soft-blue-bd);
 }
+/* ======================================================
+   FONDOS SUAVES POR SECCIÓN - Guardia
+   (Lugar/Obs/Personal/Móviles/Elementos/Cartuchos)
+   ====================================================== */
+
+/* fondo general de cada sección (card dentro de la card) */
+#tab-guardia .g-section{
+  background: rgba(255,255,255,.62);
+  border: 1px solid rgba(15,23,42,.10);
+  box-shadow: 0 6px 16px rgba(0,0,0,.05);
+}
+
+/* header de cada sección: leve tinte azulado */
+#tab-guardia .g-section-title{
+  background: rgba(59,130,246,.07);
+  border-bottom: 1px solid rgba(15,23,42,.08);
+}
+
+/* Lugar + Observaciones: un toque cian (neutral, no cansa) */
+#tab-guardia .g-section:has(#p1Lugar),
+#tab-guardia .g-section:has(#p2Lugar),
+#tab-guardia .g-section:has(#p1Obs),
+#tab-guardia .g-section:has(#p2Obs){
+  background: rgba(14,165,233,.06);
+  border-color: rgba(14,165,233,.16);
+}
+
+/* Personal: leve verde (resalta personas, descansado) */
+#tab-guardia .g-section:has(#p1Personal),
+#tab-guardia .g-section:has(#p2Personal){
+  background: rgba(34,197,94,.06);
+  border-color: rgba(34,197,94,.16);
+}
+
+/* Móviles: leve ámbar/naranja (sin saturar) */
+#tab-guardia .g-section:has(#p1Moviles),
+#tab-guardia .g-section:has(#p2Moviles){
+  background: rgba(249,115,22,.06);
+  border-color: rgba(249,115,22,.16);
+}
+
+/* Elementos: leve violeta (diferencia visual clara) */
+#tab-guardia .g-section:has(#p1Elementos),
+#tab-guardia .g-section:has(#p2Elementos){
+  background: rgba(168,85,247,.06);
+  border-color: rgba(168,85,247,.16);
+}
+
+/* Cartuchos: gris suave */
+#tab-guardia .g-section:has(#p1Cartuchos),
+#tab-guardia .g-section:has(#p2Cartuchos){
+  background: rgba(100,116,139,.06);
+  border-color: rgba(100,116,139,.16);
+}
+
+/* mejor legibilidad interna */
+#tab-guardia .g-section-body{
+  background: rgba(255,255,255,.40);
+  border-radius: 12px;
+}
+
+/* inputs/select/textarea: “premium” pero suave */
+#tab-guardia select,
+#tab-guardia textarea,
+#tab-guardia input[type="text"]{
+  background: rgba(255,255,255,.80);
+  border: 1px solid rgba(15,23,42,.12);
+  border-radius: 12px;
+}
+#tab-guardia select:focus,
+#tab-guardia textarea:focus,
+#tab-guardia input[type="text"]:focus{
+  outline: none;
+  border-color: rgba(59,130,246,.35);
+  box-shadow: 0 0 0 4px rgba(59,130,246,.12);
+}
+
 
 
 
