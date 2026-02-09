@@ -458,5 +458,158 @@ textarea{
 .row-inline .mini{
   width: 220px;
 }
+/* ======================================================
+   COLORES SUAVES - Guardia (botones + chips)
+   (pegalo al FINAL del administrador.css)
+   ====================================================== */
+
+:root{
+  /* paleta suave (background + borde + texto) */
+  --soft-blue-bg: rgba(59,130,246,.14);
+  --soft-blue-bd: rgba(59,130,246,.32);
+  --soft-blue-tx: rgba(30,64,175,.95);
+
+  --soft-cyan-bg: rgba(14,165,233,.14);
+  --soft-cyan-bd: rgba(14,165,233,.30);
+  --soft-cyan-tx: rgba(8,145,178,.95);
+
+  --soft-green-bg: rgba(34,197,94,.14);
+  --soft-green-bd: rgba(34,197,94,.30);
+  --soft-green-tx: rgba(22,101,52,.95);
+
+  --soft-orange-bg: rgba(249,115,22,.14);
+  --soft-orange-bd: rgba(249,115,22,.30);
+  --soft-orange-tx: rgba(154,52,18,.95);
+
+  --soft-purple-bg: rgba(168,85,247,.14);
+  --soft-purple-bd: rgba(168,85,247,.30);
+  --soft-purple-tx: rgba(88,28,135,.95);
+
+  --soft-gray-bg: rgba(100,116,139,.14);
+  --soft-gray-bd: rgba(100,116,139,.26);
+  --soft-gray-tx: rgba(15,23,42,.92);
+
+  --soft-shadow: 0 10px 22px rgba(0,0,0,.08);
+}
+
+/* ------------------------------
+   Micro-animaciones (solo Guardia)
+   ------------------------------ */
+#tab-guardia button,
+#tab-guardia .chip{
+  transition: transform .12s ease, box-shadow .12s ease, background-color .12s ease, border-color .12s ease;
+}
+
+#tab-guardia button:hover{
+  transform: translateY(-1px);
+  box-shadow: var(--soft-shadow);
+}
+#tab-guardia button:active{
+  transform: translateY(0);
+  box-shadow: 0 6px 14px rgba(0,0,0,.06);
+}
+
+/* ------------------------------
+   Botones header Guardia
+   ------------------------------ */
+#tab-guardia #btnGuardiaActualizar{
+  background: var(--soft-cyan-bg);
+  border-color: var(--soft-cyan-bd);
+  color: var(--soft-cyan-tx);
+}
+
+#tab-guardia #btnGuardiaGuardar{
+  background: var(--soft-blue-bg) !important;
+  border: 1px solid var(--soft-blue-bd) !important;
+  color: var(--soft-blue-tx) !important;
+}
+
+/* ------------------------------
+   Subtabs Patrulla 1 / 2
+   ------------------------------ */
+#tab-guardia .subtab-btn{
+  background: rgba(255,255,255,.75);
+  border-color: rgba(0,0,0,.12);
+}
+#tab-guardia .subtab-btn.is-active{
+  background: var(--soft-blue-bg);
+  border-color: var(--soft-blue-bd);
+  color: var(--soft-blue-tx);
+}
+
+/* ------------------------------
+   Botones acciones por patrulla
+   (según data-accion)
+   ------------------------------ */
+#tab-guardia .patrulla-actions button[data-accion="Ingreso"]{
+  background: var(--soft-blue-bg) !important;
+  border: 1px solid var(--soft-blue-bd) !important;
+  color: var(--soft-blue-tx) !important;
+}
+
+#tab-guardia .patrulla-actions button[data-accion="Retiro"]{
+  background: var(--soft-orange-bg);
+  border: 1px solid var(--soft-orange-bd);
+  color: var(--soft-orange-tx);
+}
+
+#tab-guardia .patrulla-actions button[data-accion="Presente"]{
+  background: var(--soft-green-bg);
+  border: 1px solid var(--soft-green-bd);
+  color: var(--soft-green-tx);
+}
+
+#tab-guardia .patrulla-actions button[data-accion="Franco"]{
+  background: var(--soft-purple-bg);
+  border: 1px solid var(--soft-purple-bd);
+  color: var(--soft-purple-tx);
+}
+
+#tab-guardia .patrulla-actions button[data-accion="Constancia"]{
+  background: var(--soft-gray-bg);
+  border: 1px solid var(--soft-gray-bd);
+  color: var(--soft-gray-tx);
+}
+
+/* ------------------------------
+   Chips (personal / elementos / cartuchos)
+   ------------------------------ */
+#tab-guardia .chip{
+  border: 1px solid rgba(0,0,0,.12);
+  background: rgba(255,255,255,.75);
+  border-radius: 999px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+#tab-guardia .chip:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 10px 18px rgba(0,0,0,.07);
+}
+
+/* ✅ Chip “seleccionado” (checkbox marcado) */
+#tab-guardia .chip:has(input[type="checkbox"]:checked){
+  background: var(--soft-blue-bg);
+  border-color: var(--soft-blue-bd);
+  color: var(--soft-blue-tx);
+}
+
+/* fallback si :has() no está soportado (Safari viejo):
+   el input queda visible igual y no rompe nada */
+#tab-guardia .chip input[type="checkbox"]{
+  accent-color: rgba(59,130,246,.85);
+}
+
+/* Row de móviles (checkbox + label + obs) */
+#tab-guardia .row-inline{
+  border: 1px solid rgba(0,0,0,.10);
+  background: rgba(255,255,255,.75);
+  border-radius: 14px;
+}
+#tab-guardia .row-inline:has(input[type="checkbox"]:checked){
+  background: var(--soft-blue-bg);
+  border-color: var(--soft-blue-bd);
+}
+
 
 
