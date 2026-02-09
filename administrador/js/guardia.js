@@ -14,9 +14,9 @@ const SUBGRUPO_CANON = [
   { key: "alcoholimetros", label: "Alcoholimetros" },
   { key: "pdas", label: "PDAs" },
   { key: "impresoras", label: "Impresoras" },
+  { key: "ht", label: "Ht" },
   { key: "escopetas", label: "Escopetas" },
   { key: "cartuchos", label: "Cartuchos" },
-  { key: "ht", label: "Ht" },
 ];
 
 const SUBGRUPO_KEY_TO_LABEL = new Map(SUBGRUPO_CANON.map((x) => [x.key, x.label]));
@@ -31,271 +31,431 @@ function normalizeKey(s) {
     .replace(/[íìïî]/g, "i")
     .replace(/[óòöô]/g, "o")
     .replace(/[úùüû]/g, "u")
-    .replace(/ñ/g, "n")
-    .replace(/[^a-z0-9]+/g, "");
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }
 
-function canonSubgrupo(raw) {
+function getSubgrupoLabel(meta) {
+  const raw = meta?.subgrupo || meta?.subGroup || meta?.grupo || meta?.group || "";
   const k = normalizeKey(raw);
-  if (!k) return "SinSubgrupo";
-
-  if (k === "pda" || k === "pdas") return "PDAs";
-  if (k === "alometro" || k === "alometros") return "Alometros";
-  if (k === "alcoholimetro" || k === "alcoholimetros") return "Alcoholimetros";
-  if (k === "impresora" || k === "impresoras") return "Impresoras";
-  if (k === "ht" || k === "handy" || k === "handytalkie" || k === "handywalkie") return "Ht";
-  if (k === "escopeta" || k === "escopetas") return "Escopetas";
-  if (k === "cartucho" || k === "cartuchos") return "Cartuchos";
-
   if (SUBGRUPO_KEY_TO_LABEL.has(k)) return SUBGRUPO_KEY_TO_LABEL.get(k);
-
-  const cleaned = String(raw || "").trim();
-  return cleaned || "SinSubgrupo";
+  return raw ? String(raw).trim() : "";
 }
 
-function isSubgrupo(item, labelCanon) {
-  const sg = canonSubgrupo(item?.meta?.subgrupo);
-  return sg === labelCanon;
-}
-
-function lugaresDesdeOrdenes() {
-  if (typeof StorageApp === "undefined" || !StorageApp.cargarOrdenes) return [];
-  const ordenes = StorageApp.cargarOrdenes();
-  const set = new Set();
-
-  (ordenes || []).forEach((o) => {
-    (o?.franjas || []).forEach((f) => {
-      const lug = normalizarLugar(f?.lugar);
-      if (lug) set.add(lug);
-    });
+function groupElementosBySubgrupo(elementoValues = []) {
+  // agrupa por subgrupo canonical
+  const map = new Map();
+  elementoValues.forEach((val) => {
+    const meta = invActivos("elemento").find((x) => x.value === val)?.meta || {};
+    const label = getSubgrupoLabel(meta) || "Otros";
+    if (!map.has(label)) map.set(label, []);
+    map.get(label).push(val);
   });
 
-  return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
-}
-
-function fillLugarSelect(selectEl) {
-  if (!selectEl) return;
-  const lugares = lugaresDesdeOrdenes();
-  const actual = selectEl.value || "";
-  selectEl.innerHTML = `<option value="">Seleccionar lugar</option>`;
-  lugares.forEach((l) => {
-    const opt = document.createElement("option");
-    opt.value = l;
-    opt.textContent = l;
-    selectEl.appendChild(opt);
+  // orden por SUBGRUPOS_ORDEN (lo que no está, al final)
+  const keys = Array.from(map.keys());
+  keys.sort((a, b) => {
+    const ia = SUBGRUPOS_ORDEN.indexOf(a);
+    const ib = SUBGRUPOS_ORDEN.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
   });
-  if (actual && lugares.includes(actual)) selectEl.value = actual;
-}
-
-export function cargarLugaresParaGuardia({ p1Lugar, p2Lugar } = {}) {
-  fillLugarSelect(p1Lugar);
-  fillLugarSelect(p2Lugar);
-}
-
-function chipsCheckbox(container, items, { prefix }) {
-  if (!container) return;
-  if (!items.length) {
-    container.innerHTML = `<div class="muted">Sin datos.</div>`;
-    return;
-  }
-
-  container.innerHTML = items
-    .map((it, idx) => {
-      const id = `${prefix}_${idx}`;
-      return `
-        <label class="checkbox-container" style="display:flex; align-items:center; gap:8px; border:1px solid #ddd; padding:6px 10px; border-radius:999px;">
-          <input type="checkbox" id="${esc(id)}" value="${esc(it.value)}">
-          <span>${esc(it.label)}</span>
-        </label>
-      `;
-    })
-    .join("");
-}
-
-function renderMoviles(container, moviles, { prefix }) {
-  if (!container) return;
-  if (!moviles.length) {
-    container.innerHTML = `<div class="muted">Sin móviles activos.</div>`;
-    return;
-  }
-
-  container.innerHTML = moviles
-    .map((m, idx) => {
-      const baseId = `${prefix}_mov_${idx}`;
-      return `
-        <div style="display:flex; align-items:center; gap:10px; border:1px solid #ddd; border-radius:12px; padding:8px 10px; margin:6px 0; background:#fff;">
-          <label style="display:flex; align-items:center; gap:8px; min-width:180px;">
-            <input type="checkbox" data-movil-pick="1" data-movil-id="${esc(m.value)}" id="${esc(baseId)}">
-            <span style="font-weight:700;">${esc(m.label)}</span>
-          </label>
-
-          <label class="muted" style="display:flex; align-items:center; gap:6px;">
-            <input type="checkbox" data-movil-flag="libro" data-movil-id="${esc(m.value)}" disabled>
-            libro
-          </label>
-
-          <label class="muted" style="display:flex; align-items:center; gap:6px;">
-            <input type="checkbox" data-movil-flag="llave" data-movil-id="${esc(m.value)}" disabled>
-            llave
-          </label>
-
-          <label class="muted" style="display:flex; align-items:center; gap:6px;">
-            <input type="checkbox" data-movil-flag="tvf" data-movil-id="${esc(m.value)}" disabled>
-            tvf
-          </label>
-        </div>
-      `;
-    })
-    .join("");
-
-  container.querySelectorAll('input[data-movil-pick="1"]').forEach((chk) => {
-    chk.addEventListener("change", () => {
-      const movilId = chk.getAttribute("data-movil-id");
-      const enabled = chk.checked;
-      const flags = container.querySelectorAll(
-        `input[data-movil-flag][data-movil-id="${CSS.escape(movilId)}"]`
-      );
-      flags.forEach((f) => {
-        f.disabled = !enabled;
-        if (!enabled) f.checked = false;
-      });
-    });
-  });
-}
-
-function groupElementos(elementosActivos) {
-  const groups = new Map();
-
-  (elementosActivos || []).forEach((e) => {
-    const sgCanon = canonSubgrupo(e?.meta?.subgrupo);
-    if (!groups.has(sgCanon)) groups.set(sgCanon, []);
-    groups.get(sgCanon).push(e);
-  });
-
-  for (const [k, arr] of groups.entries()) {
-    arr.sort((a, b) => (a.orden - b.orden) || String(a.label).localeCompare(String(b.label), "es"));
-    groups.set(k, arr);
-  }
 
   const ordered = [];
-  SUBGRUPOS_ORDEN.forEach((sg) => {
-    if (groups.has(sg)) ordered.push([sg, groups.get(sg)]);
-  });
-
-  Array.from(groups.keys())
-    .filter((k) => !SUBGRUPOS_ORDEN.includes(k))
-    .sort((a, b) => a.localeCompare(b, "es"))
-    .forEach((k) => ordered.push([k, groups.get(k)]));
-
+  keys.forEach((k) => ordered.push([k, map.get(k)]));
   return ordered;
 }
 
-function renderElementos(container, elementosActivos, { prefix }) {
+function readCheckedValues(container) {
+  if (!container) return [];
+  return Array.from(container.querySelectorAll('input[type="checkbox"][data-value]'))
+    .filter((x) => x.checked && x.getAttribute("data-locked") !== "1")
+    .map((x) => x.getAttribute("data-value"))
+    .filter(Boolean);
+}
+
+function renderChips(container, items, checkedValues = []) {
   if (!container) return;
-  if (!elementosActivos.length) {
-    container.innerHTML = `<div class="muted">Sin elementos activos.</div>`;
-    return;
-  }
+  container.innerHTML = "";
+  items.forEach((it) => {
+    const id = `chk_${slugifyValue(it.value)}_${Math.random().toString(16).slice(2)}`;
+    const wrap = document.createElement("label");
+    wrap.className = "chip";
 
-  const grouped = groupElementos(elementosActivos);
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.id = id;
+    chk.setAttribute("data-value", it.value);
+    chk.checked = checkedValues.includes(it.value);
 
-  container.innerHTML = grouped
-    .map(([sg, items]) => {
-      const listId = `${prefix}_sg_${slugifyValue(sg)}`;
-      return `
-        <div style="border:1px solid #e5e5e5; border-radius:14px; padding:10px; margin:10px 0; background:#fff;">
-          <div style="font-weight:800; margin-bottom:8px;">${esc(sg)}</div>
-          <div id="${esc(listId)}" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
-        </div>
-      `;
-    })
-    .join("");
+    const span = document.createElement("span");
+    span.textContent = it.label;
 
-  grouped.forEach(([sg, items]) => {
-    const listId = `${prefix}_sg_${slugifyValue(sg)}`;
-    const holder = container.querySelector(`#${CSS.escape(listId)}`);
-    if (!holder) return;
-    chipsCheckbox(holder, items, { prefix: `${listId}_it` });
+    wrap.appendChild(chk);
+    wrap.appendChild(span);
+    container.appendChild(wrap);
   });
 }
 
-function renderCartuchos(container, cartuchosMap = {}) {
+/* ======================================================
+   ✅ MOVILES (con Libro/TVF por retiro + label a la izquierda)
+   Estructura guardada:
+   { movil_id, obs, libro, tvf }
+   ====================================================== */
+
+function renderMoviles(container, items, selected = [], lockedMap = new Map()) {
   if (!container) return;
   container.innerHTML = "";
 
-  // ✅ Cartuchos fijos (solo visibles si hay escopeta)
-  // Guardado en cartuchos_map: { at_1270: number, pg_1270: number }
-  const items = [
-    { key: "at_1270", label: "Cartuchos AT cal 12/70" },
-    { key: "pg_1270", label: "Cartuchos PG cal 12/70" },
-  ];
+  // selectedMap: lo que está elegido EN ESTA patrulla
+  const selectedMap = new Map(
+    (Array.isArray(selected) ? selected : []).map((x) => [
+      x?.movil_id,
+      {
+        movil_id: x?.movil_id,
+        obs: (x?.obs || "").trim(),
+        libro: !!x?.libro,
+        tvf: !!x?.tvf,
+      },
+    ])
+  );
+
+  function mkFlag(labelTxt, dataFlag, checked, disabled) {
+    const wrap = document.createElement("label");
+    wrap.className = "mov-flag";
+
+    const c = document.createElement("input");
+    c.type = "checkbox";
+    c.checked = !!checked;
+    c.disabled = !!disabled;
+    c.setAttribute("data-flag", dataFlag);
+
+    const t = document.createElement("span");
+    t.textContent = labelTxt;
+
+    wrap.appendChild(c);
+    wrap.appendChild(t);
+    return wrap;
+  }
 
   items.forEach((it) => {
     const row = document.createElement("div");
-    row.className = "row-inline cart-row";
+    row.className = "row-inline";
 
-    const lab = document.createElement("div");
-    lab.className = "cart-label";
-    lab.textContent = it.label;
+    const id = `mov_${slugifyValue(it.value)}_${Math.random().toString(16).slice(2)}`;
 
-    const qty = document.createElement("input");
-    qty.type = "number";
-    qty.min = "0";
-    qty.step = "1";
-    qty.inputMode = "numeric";
-    qty.placeholder = "0";
-    qty.className = "cart-qty";
-    qty.setAttribute("data-key", it.key);
-    qty.value = Number.isFinite(Number(cartuchosMap?.[it.key])) ? String(parseInt(cartuchosMap[it.key], 10) || 0) : "0";
+    const own = selectedMap.get(it.value) || { movil_id: it.value, obs: "", libro: false, tvf: false };
+    const locked = lockedMap.get(it.value) || null;
 
-    row.appendChild(lab);
-    row.appendChild(qty);
+    // si está bloqueado por otra patrulla, lo mostramos "tildado rojo" y no editable
+    const isLockedByOther = !!locked && !selectedMap.has(it.value);
+    const effective = isLockedByOther ? locked : own;
+    const isSelected = selectedMap.has(it.value) || isLockedByOther;
+
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.id = id;
+    chk.checked = isSelected;
+    chk.setAttribute("data-value", it.value);
+
+    if (isLockedByOther) {
+      chk.disabled = true;
+      chk.setAttribute("data-locked", "1");
+      row.classList.add("is-locked");
+    }
+
+    const name = document.createElement("label");
+    name.setAttribute("for", id);
+    name.className = "movil-name";
+    name.textContent = it.label;
+
+    const flags = document.createElement("div");
+    flags.className = "mov-flags";
+
+    const flagLibro = mkFlag("Libro", "libro", effective.libro, !chk.checked || isLockedByOther);
+    const flagTvf = mkFlag("TVF", "tvf", effective.tvf, !chk.checked || isLockedByOther);
+
+    flags.appendChild(flagLibro);
+    flags.appendChild(flagTvf);
+
+    const obs = document.createElement("input");
+    obs.type = "text";
+    obs.placeholder = "Obs (opcional)";
+    obs.className = "mini";
+    obs.value = effective.obs || "";
+    obs.disabled = !chk.checked || isLockedByOther;
+
+    const syncEnabled = () => {
+      if (isLockedByOther) return; // nunca habilitar
+
+      const enabled = chk.checked;
+      obs.disabled = !enabled;
+      if (!enabled) obs.value = "";
+
+      flags.querySelectorAll('input[type="checkbox"][data-flag]').forEach((c) => {
+        c.disabled = !enabled;
+        if (!enabled) c.checked = false;
+      });
+    };
+
+    chk.addEventListener("change", syncEnabled);
+    syncEnabled();
+
+    // ✅ UI: el texto/número del móvil va a la IZQUIERDA del tilde principal
+    // Orden visual: [NOMBRE] [chk] [Libro/TVF] [Obs]
+    row.appendChild(name);
+    row.appendChild(chk);
+    row.appendChild(flags);
+    row.appendChild(obs);
+
     container.appendChild(row);
+  });
+}
+
+function readMoviles(container) {
+  if (!container) return [];
+  const rows = Array.from(container.querySelectorAll(".row-inline"));
+  const out = [];
+
+  rows.forEach((row) => {
+    const chk = row.querySelector('input[type="checkbox"][data-value]');
+    if (!chk?.checked) return;
+    // ✅ si es bloqueo por otra patrulla, NO lo contamos para esta
+    if (chk.getAttribute("data-locked") === "1") return;
+
+    const movil_id = chk.getAttribute("data-value");
+
+    const obs = row.querySelector('input[type="text"]');
+    const libro = row.querySelector('input[type="checkbox"][data-flag="libro"]');
+    const tvf = row.querySelector('input[type="checkbox"][data-flag="tvf"]');
+
+    out.push({
+      movil_id,
+      obs: (obs?.value || "").trim(),
+      libro: !!libro?.checked,
+      tvf: !!tvf?.checked,
+    });
+  });
+
+  return out;
+}
+
+// ======================================================
+// BLOQUEO CRUZADO (P1 vs P2) - Personal / Elementos / Moviles
+// ======================================================
+
+function buildOwnerMapFromArrays(p1Arr = [], p2Arr = []) {
+  const owner = new Map();
+  (Array.isArray(p1Arr) ? p1Arr : []).forEach((v) => owner.set(String(v), "p1"));
+  (Array.isArray(p2Arr) ? p2Arr : []).forEach((v) => {
+    const k = String(v);
+    if (!owner.has(k)) owner.set(k, "p2");
+  });
+  return owner;
+}
+
+function applyChipLocks(container, ownerMap, myKey) {
+  if (!container) return;
+
+  const inputs = Array.from(container.querySelectorAll('input[type="checkbox"][data-value]'));
+  inputs.forEach((chk) => {
+    const v = chk.getAttribute("data-value");
+    const owner = ownerMap.get(String(v));
+
+    // reset default
+    chk.removeAttribute("data-locked");
+    chk.disabled = false;
+    chk.closest(".chip")?.classList.remove("is-locked");
+
+    if (owner && owner !== myKey) {
+      // bloqueado por otra patrulla:
+      // - se ve rojo (checked)
+      // - no se puede tocar
+      chk.checked = true;
+      chk.disabled = true;
+      chk.setAttribute("data-locked", "1");
+      chk.closest(".chip")?.classList.add("is-locked");
+    }
+  });
+}
+
+function buildLockedMovilMap(otherMoviles = []) {
+  const m = new Map();
+  (Array.isArray(otherMoviles) ? otherMoviles : []).forEach((x) => {
+    if (!x?.movil_id) return;
+    m.set(String(x.movil_id), {
+      movil_id: String(x.movil_id),
+      obs: (x?.obs || "").trim(),
+      libro: !!x?.libro,
+      tvf: !!x?.tvf,
+    });
+  });
+  return m;
+}
+
+function aplicarReglaCartuchos(elementosContainer, cartuchosContainer, precomputedElementosIds = null) {
+  if (!elementosContainer || !cartuchosContainer) return;
+
+  const elementosIds = precomputedElementosIds || readCheckedValues(elementosContainer);
+  const hayEscopeta = elementosIds.some((id) => {
+    const label = invLabelFromValue("elemento", id).toLowerCase();
+    return label.includes("escopeta");
+  });
+
+  cartuchosContainer.style.display = hayEscopeta ? "block" : "none";
+  if (!hayEscopeta) {
+    cartuchosContainer.querySelectorAll("input[type=checkbox]").forEach((c) => (c.checked = false));
+  }
+}
+
+function renderCartuchos(container, checkedMap = {}) {
+  if (!container) return;
+  container.innerHTML = "";
+
+  const tipos = [
+    { key: "posta", label: "Posta" },
+    { key: "antitumulto", label: "Antitumulto" },
+    { key: "goma", label: "Goma" },
+  ];
+
+  tipos.forEach((t) => {
+    const id = `cart_${t.key}_${Math.random().toString(16).slice(2)}`;
+    const wrap = document.createElement("label");
+    wrap.className = "chip";
+
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.id = id;
+    chk.setAttribute("data-key", t.key);
+    chk.checked = Boolean(checkedMap?.[t.key]);
+
+    const span = document.createElement("span");
+    span.textContent = t.label;
+
+    wrap.appendChild(chk);
+    wrap.appendChild(span);
+    container.appendChild(wrap);
   });
 }
 
 function readCartuchos(container) {
   if (!container) return {};
   const map = {};
-  Array.from(container.querySelectorAll('input[type="number"][data-key]')).forEach((inp) => {
-    const k = inp.getAttribute("data-key");
-    const n = parseInt(inp.value, 10);
-    map[k] = Number.isFinite(n) && n >= 0 ? n : 0;
+  Array.from(container.querySelectorAll('input[type="checkbox"][data-key]')).forEach((c) => {
+    map[c.getAttribute("data-key")] = c.checked;
   });
   return map;
 }
 
-function patrullaTieneEscopeta(elementos_ids) {
-  const escopetas = invActivos("elemento").filter((e) => isSubgrupo(e, "Escopetas"));
-  const escIds = new Set(escopetas.map((x) => x.value));
-  return (elementos_ids || []).some((id) => escIds.has(id));
+function getLugaresFromFranjasTextarea() {
+  const t = document.getElementById("franjas")?.value || "";
+  const out = new Set();
+
+  t.split("\n").forEach((line) => {
+    const s = String(line || "").trim();
+    if (!s) return;
+
+    let parts = s.split(" - ").map((x) => x.trim()).filter(Boolean);
+    if (parts.length < 2) parts = s.split("-").map((x) => x.trim()).filter(Boolean);
+    if (parts.length < 2) return;
+
+    const lugar = normalizarLugar(parts[1]);
+    if (lugar) out.add(lugar);
+  });
+
+  return Array.from(out).sort((a, b) => a.localeCompare(b));
 }
 
-function aplicarReglaCartuchos(elContainer, cartContainer, elementos_ids_override) {
-  if (!cartContainer) return;
+function getLugaresFromOrdenes() {
+  const out = new Set();
+  const ords = Array.isArray(state?.ordenes) ? state.ordenes : [];
+  ords.forEach((o) => {
+    const franjas = Array.isArray(o?.franjas) ? o.franjas : [];
+    franjas.forEach((f) => {
+      const l = normalizarLugar(f?.lugar || "");
+      if (l) out.add(l);
+    });
+  });
+  return Array.from(out).sort((a, b) => a.localeCompare(b));
+}
 
-  const elementos_ids =
-    Array.isArray(elementos_ids_override) ? elementos_ids_override : readCheckedValues(elContainer);
+function tryGetOrdenesFromStorageApp() {
+  try {
+    const sa = window.storageApp;
+    if (sa) {
+      if (typeof sa.getOrdenes === "function") return sa.getOrdenes() || [];
+      if (typeof sa.listOrdenes === "function") return sa.listOrdenes() || [];
+      if (typeof sa.getAllOrdenes === "function") return sa.getAllOrdenes() || [];
+      if (Array.isArray(sa.ordenes)) return sa.ordenes || [];
+    }
 
-  const hayEscopeta = (elementos_ids || []).some((id) => {
-    const label = invLabelFromValue("elemento", id).toLowerCase();
-    return label.includes("escopeta");
+    const keys = ["ordenes_operacionales", "ordenesOperacionales", "ordenes", "orders", "ordenes_storage"];
+    for (const k of keys) {
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed?.ordenes)) return parsed.ordenes;
+      if (Array.isArray(parsed?.items)) return parsed.items;
+    }
+
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+function extractLugaresFromOrdenesArray(ords) {
+  const out = new Set();
+
+  (Array.isArray(ords) ? ords : []).forEach((o) => {
+    const franjas = Array.isArray(o?.franjas) ? o.franjas : [];
+    franjas.forEach((f) => {
+      const l = normalizarLugar(f?.lugar || "");
+      if (l) out.add(l);
+    });
+
+    const franjasTxt = String(o?.franjasTexto || o?.franjas_texto || "").trim();
+    if (franjasTxt) {
+      franjasTxt.split("\n").forEach((line) => {
+        const s = line.trim();
+        if (!s) return;
+
+        let parts = s.split(" - ").map((x) => x.trim()).filter(Boolean);
+        if (parts.length < 2) parts = s.split("-").map((x) => x.trim()).filter(Boolean);
+        if (parts.length < 2) return;
+
+        const lugar = normalizarLugar(parts[1]);
+        if (lugar) out.add(lugar);
+      });
+    }
   });
 
-  cartContainer.style.display = hayEscopeta ? "block" : "none";
+  return Array.from(out).sort((a, b) => a.localeCompare(b));
+}
 
-  // Si no hay escopeta: resetear cantidades y bloquear inputs
-  cartContainer.querySelectorAll('input[type="number"][data-key]').forEach((inp) => {
-    inp.disabled = !hayEscopeta;
-    if (!hayEscopeta) inp.value = "0";
-  });
+function getLugaresSmart() {
+  const fromState = getLugaresFromOrdenes();
+  if (fromState.length) return fromState;
+
+  const ordsStored = tryGetOrdenesFromStorageApp();
+  const fromStored = extractLugaresFromOrdenesArray(ordsStored);
+  if (fromStored.length) return fromStored;
+
+  const fromFranjas = getLugaresFromFranjasTextarea();
+  if (fromFranjas.length) return fromFranjas;
+
+  return [];
 }
 
 export function initGuardia({ sb, subtabs } = {}) {
-  const guardiaEstadoTxt = document.getElementById("guardiaEstadoTxt");
+  const elEstadoTxt = () => document.getElementById("guardiaEstadoTxt");
+  const elPreview = () => document.getElementById("guardiaJsonPreview");
+
   const btnGuardiaGuardar = document.getElementById("btnGuardiaGuardar");
   const btnGuardiaActualizar = document.getElementById("btnGuardiaActualizar");
-  const preGuardia = document.getElementById("guardiaJsonPreview");
 
   const p1Lugar = document.getElementById("p1Lugar");
   const p1Obs = document.getElementById("p1Obs");
@@ -311,105 +471,112 @@ export function initGuardia({ sb, subtabs } = {}) {
   const p2Elementos = document.getElementById("p2Elementos");
   const p2Cartuchos = document.getElementById("p2Cartuchos");
 
-  let guardiaState = state.guardiaState;
+  let guardiaState = state?.guardia || null;
 
-  function renderGuardiaPreview() {
-    if (preGuardia) preGuardia.textContent = JSON.stringify(guardiaState || {}, null, 2);
-    if (guardiaEstadoTxt) guardiaEstadoTxt.textContent = `Última actualización: ${guardiaState.updated_at_ts || "—"}`;
+  function setEstado(s) {
+    const el = elEstadoTxt();
+    if (el) el.textContent = s || "";
   }
 
-  function aplicarStateAGuardiaUI() {
-    const p1 = guardiaState?.patrullas?.p1 || {};
-    const p2 = guardiaState?.patrullas?.p2 || {};
+  function renderGuardiaPreview() {
+    const pre = elPreview();
+    if (pre) pre.textContent = JSON.stringify(guardiaState || {}, null, 2);
+  }
 
-    if (p1Lugar) p1Lugar.value = p1.lugar || "";
-    if (p1Obs) p1Obs.value = p1.obs || "";
-    if (p2Lugar) p2Lugar.value = p2.lugar || "";
-    if (p2Obs) p2Obs.value = p2.obs || "";
-
-    (p1Personal?.querySelectorAll('input[type="checkbox"]') || []).forEach((x) => {
-      x.checked = Array.isArray(p1.personal_ids) && p1.personal_ids.includes(x.value);
-    });
-    (p2Personal?.querySelectorAll('input[type="checkbox"]') || []).forEach((x) => {
-      x.checked = Array.isArray(p2.personal_ids) && p2.personal_ids.includes(x.value);
-    });
-
-    function applyMov(container, movArr) {
-      if (!container) return;
-      const byId = new Map((movArr || []).map((m) => [String(m.movil_id), m]));
-      container.querySelectorAll('input[data-movil-pick="1"]').forEach((chk) => {
-        const id = chk.getAttribute("data-movil-id");
-        const m = byId.get(String(id));
-        chk.checked = !!m;
-
-        chk.dispatchEvent(new Event("change"));
-
-        if (m) {
-          const libro = container.querySelector(`input[data-movil-flag="libro"][data-movil-id="${CSS.escape(id)}"]`);
-          const llave = container.querySelector(`input[data-movil-flag="llave"][data-movil-id="${CSS.escape(id)}"]`);
-          const tvf = container.querySelector(`input[data-movil-flag="tvf"][data-movil-id="${CSS.escape(id)}"]`);
-          if (libro) libro.checked = !!m.libro;
-          if (llave) llave.checked = !!m.llave;
-          if (tvf) tvf.checked = !!m.tvf;
-        }
-      });
-    }
-
-    applyMov(p1Moviles, p1.moviles);
-    applyMov(p2Moviles, p2.moviles);
-
-    function applyElems(container, ids) {
-      if (!container) return;
-      container.querySelectorAll('input[type="checkbox"]').forEach((chk) => {
-        if (!chk.value) return;
-        chk.checked = Array.isArray(ids) && ids.includes(chk.value);
-      });
-    }
-
-    applyElems(p1Elementos, p1.elementos_ids);
-    applyElems(p2Elementos, p2.elementos_ids);
-
-    // Cartuchos: visibles solo si hay escopeta (y cantidades desde cartuchos_map)
-    aplicarReglaCartuchos(p1Elementos, p1Cartuchos, p1.elementos_ids || []);
-    aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2.elementos_ids || []);
-
-
-    aplicarReglaCartuchos(p1Elementos, p1Cartuchos, p1.elementos_ids);
-    aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2.elementos_ids);
-
-    renderGuardiaPreview();
-
-    if (subtabs) {
-      subtabs.boot();
-      subtabs.apply();
-    }
+  function fillSelectOptions(selectEl, opts, currentVal = "") {
+    if (!selectEl) return;
+    const val = currentVal || "";
+    selectEl.innerHTML = `<option value="">Seleccionar</option>` + opts.map((o) => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
+    if (val) selectEl.value = val;
   }
 
   function renderGuardiaDesdeInventario() {
-    const personal = invActivos("personal");
-    const moviles = invActivos("movil");
-    const elementos = invActivos("elemento");
+    // Lugares
+    const lugares = getLugaresSmart();
+    fillSelectOptions(p1Lugar, lugares, guardiaState?.patrullas?.p1?.lugar || "");
+    fillSelectOptions(p2Lugar, lugares, guardiaState?.patrullas?.p2?.lugar || "");
 
-    chipsCheckbox(p1Personal, personal, { prefix: "p1_per" });
-    chipsCheckbox(p2Personal, personal, { prefix: "p2_per" });
+    // Inventario
+    const pers = invActivos("personal");
+    const movs = invActivos("movil");
+    const elems = invActivos("elemento");
 
-    renderMoviles(p1Moviles, moviles, { prefix: "p1" });
-    renderMoviles(p2Moviles, moviles, { prefix: "p2" });
+    // Estado actual
+    const p1 = guardiaState?.patrullas?.p1 || {};
+    const p2 = guardiaState?.patrullas?.p2 || {};
 
-    const elementosNoCart = elementos.filter((e) => !isSubgrupo(e, "Cartuchos"));
-    renderElementos(p1Elementos, elementosNoCart, { prefix: "p1_el" });
-    renderElementos(p2Elementos, elementosNoCart, { prefix: "p2_el" });
+    // ✅ Render base (según lo que usa cada patrulla)
+    renderChips(p1Personal, pers, p1.personal_ids || []);
+    renderChips(p2Personal, pers, p2.personal_ids || []);
 
-    // ✅ Cartuchos fijos AT/PG cal 12/70 (se muestran solo si hay escopeta)
-    renderCartuchos(p1Cartuchos, guardiaState?.patrullas?.p1?.cartuchos_map || {});
-    renderCartuchos(p2Cartuchos, guardiaState?.patrullas?.p2?.cartuchos_map || {});
+    // ✅ Moviles con flags
+    const p1LockedMov = buildLockedMovilMap(p2.moviles || []);
+    const p2LockedMov = buildLockedMovilMap(p1.moviles || []);
+    renderMoviles(p1Moviles, movs, p1.moviles || [], p1LockedMov);
+    renderMoviles(p2Moviles, movs, p2.moviles || [], p2LockedMov);
 
-    aplicarStateAGuardiaUI();
+    // Elementos agrupados
+    const p1Elems = p1.elementos_ids || [];
+    const p2Elems = p2.elementos_ids || [];
+    const groups1 = groupElementosBySubgrupo(elems.map((x) => x.value));
+    const groups2 = groups1;
 
-    if (subtabs) {
-      subtabs.boot();
-      subtabs.apply();
-    }
+    const renderElementosGrouped = (container, checked, groups) => {
+      if (!container) return;
+      container.innerHTML = "";
+      groups.forEach(([label, vals]) => {
+        const h = document.createElement("div");
+        h.className = "subhead";
+        h.textContent = label;
+        container.appendChild(h);
+
+        const row = document.createElement("div");
+        row.className = "chip-grid";
+
+        const items = vals.map((v) => {
+          const it = elems.find((x) => x.value === v);
+          return it || { label: v, value: v };
+        });
+        renderChips(row, items, checked);
+        container.appendChild(row);
+      });
+    };
+
+    renderElementosGrouped(p1Elementos, p1Elems, groups1);
+    renderElementosGrouped(p2Elementos, p2Elems, groups2);
+
+    // Cartuchos
+    renderCartuchos(p1Cartuchos, p1.cartuchos_map || {});
+    renderCartuchos(p2Cartuchos, p2.cartuchos_map || {});
+    aplicarReglaCartuchos(p1Elementos, p1Cartuchos, p1Elems);
+    aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2Elems);
+
+    // Obs
+    if (p1Obs) p1Obs.value = p1.obs || "";
+    if (p2Obs) p2Obs.value = p2.obs || "";
+
+    // ==================================================
+    // ✅ BLOQUEO CRUZADO (lo último del render)
+    // - Personal: si lo usa una patrulla, queda rojo + bloqueado en la otra
+    // - Elementos: idem
+    // - Moviles: ya se bloquean en renderMoviles con lockedMap
+    // ==================================================
+    const personalOwner = buildOwnerMapFromArrays(p1.personal_ids || [], p2.personal_ids || []);
+    applyChipLocks(p1Personal, personalOwner, "p1");
+    applyChipLocks(p2Personal, personalOwner, "p2");
+
+    const elementosOwner = buildOwnerMapFromArrays(p1Elems, p2Elems);
+    applyChipLocks(p1Elementos, elementosOwner, "p1");
+    applyChipLocks(p2Elementos, elementosOwner, "p2");
+  }
+
+  function aplicarStateAGuardiaUI() {
+    guardiaState = state?.guardia || guardiaState || null;
+    renderGuardiaDesdeInventario();
+    renderGuardiaPreview();
+
+    const logLen = Array.isArray(guardiaState?.log) ? guardiaState.log.length : 0;
+    setEstado(logLen ? `OK · Logs: ${logLen}` : "OK");
   }
 
   function buildStateFromUI() {
@@ -455,69 +622,66 @@ export function initGuardia({ sb, subtabs } = {}) {
 
   async function cargarGuardiaDesdeServidor() {
     const session = await getSessionOrNull(sb);
-    const headers = {
-      apikey: SUPABASE_ANON_KEY,
-      Accept: "application/json",
-    };
-    if (session?.access_token) headers.Authorization = "Bearer " + session.access_token;
+    if (!session) return null;
 
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/guardia_estado?select=payload&id=eq.1&limit=1`, { headers });
+    const url = `${SUPABASE_URL}/rest/v1/guardia_estado?id=eq.1&select=payload`;
+    const resp = await fetch(url, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: "Bearer " + session.access_token,
+        Accept: "application/json",
+      },
+    });
 
-    if (!r.ok) {
-      const txt = await r.text();
-      console.warn("[ADMIN] No se pudo leer guardia_estado:", r.status, txt);
-      renderGuardiaPreview();
-      return;
-    }
-
-    const data = await r.json();
-    const payload = data?.[0]?.payload || null;
-
-    if (payload && typeof payload === "object") {
-      setGuardiaState(payload);
-      guardiaState = state.guardiaState;
-    }
-
-    aplicarStateAGuardiaUI();
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const payload = data?.[0]?.payload;
+    return payload && typeof payload === "object" ? payload : null;
   }
 
   async function guardarGuardiaEnServidor(nextPayload) {
     const session = await getSessionOrNull(sb);
     if (!session) {
-      alert("No hay sesión iniciada. Inicie sesión antes de guardar Guardia.");
+      alert("No hay sesión activa. Volvé a iniciar sesión.");
       return false;
     }
 
     const res = await patchOrInsertStore({ table: "guardia_estado", payload: nextPayload, session });
     if (!res.ok) {
       console.error("[ADMIN] Error guardando guardia_estado:", res.status, res.text);
-      alert("Error guardando Guardia. Mirá Console (F12). Status: " + res.status);
+      alert("Error guardando Guardia. Mirá Console (F12).");
       return false;
     }
 
-    const p = res.data?.[0]?.payload ?? res.data?.payload ?? null;
-    setGuardiaState(p && typeof p === "object" ? p : nextPayload);
-    guardiaState = state.guardiaState;
-
+    setGuardiaState(nextPayload);
+    guardiaState = nextPayload;
     renderGuardiaPreview();
     return true;
   }
 
   async function onGuardarGuardia() {
     const next = buildStateFromUI();
-    const ok = await guardarGuardiaEnServidor(next);
-    if (ok) alert("Guardia guardada (defaults publicados).");
+    await guardarGuardiaEnServidor(next);
+    aplicarStateAGuardiaUI();
   }
 
   async function onActualizarGuardia({ invLoad } = {}) {
-    if (typeof invLoad === "function") await invLoad();
-    cargarLugaresParaGuardia({ p1Lugar, p2Lugar });
-    await cargarGuardiaDesdeServidor();
+    const payload = await cargarGuardiaDesdeServidor();
+    if (payload) setGuardiaState(payload);
+    guardiaState = state?.guardia || payload || guardiaState;
+    renderGuardiaDesdeInventario();
+    renderGuardiaPreview();
+    setEstado(payload ? "Actualizado" : "Sin datos");
 
-    if (subtabs) {
-      subtabs.boot();
-      subtabs.apply();
+    if (typeof invLoad === "function") {
+      try {
+        await invLoad();
+      } catch {}
     }
+  }
+
+  function refreshLugares() {
+    renderGuardiaDesdeInventario();
   }
 
   function bindAccionesEstado() {
@@ -544,7 +708,21 @@ export function initGuardia({ sb, subtabs } = {}) {
         const resumen = `Personal: ${perTxt || "-"} | Movil(es): ${movTxt || "-"} | Elementos: ${elemTxt || "-"}`;
 
         next.log = Array.isArray(next.log) ? next.log : [];
-        next.log.unshift({ patrulla: String(p).toUpperCase(), accion, hora, ts, resumen });
+        next.log.unshift({
+          patrulla: String(p).toUpperCase(),
+          accion,
+          hora,
+          ts,
+          resumen,
+          snapshot: {
+            lugar: pat.lugar || "",
+            obs: pat.obs || "",
+            personal_ids: Array.isArray(pat.personal_ids) ? [...pat.personal_ids] : [],
+            moviles: Array.isArray(pat.moviles) ? cloneDeep(pat.moviles) : [],
+            elementos_ids: Array.isArray(pat.elementos_ids) ? [...pat.elementos_ids] : [],
+            cartuchos_map: pat.cartuchos_map ? cloneDeep(pat.cartuchos_map) : {},
+          },
+        });
 
         await guardarGuardiaEnServidor(next);
         aplicarStateAGuardiaUI();
@@ -561,40 +739,70 @@ export function initGuardia({ sb, subtabs } = {}) {
     hook(p2Elementos, p2Cartuchos);
   }
 
+  function bindRefrescoPorGuardarOrden() {
+    const btnGuardarOrden = document.querySelector('button[onclick*="agregarOrden"]') || document.getElementById("btnGuardarOrden") || null;
+
+    if (btnGuardarOrden) {
+      btnGuardarOrden.addEventListener("click", () => {
+        setTimeout(() => {
+          refreshLugares();
+          renderGuardiaPreview();
+          setEstado("Lugares actualizados (guardar orden)");
+        }, 50);
+      });
+    }
+
+    if (typeof window !== "undefined" && typeof window.agregarOrden === "function") {
+      if (!window.__guardia_hook_agregarOrden) {
+        window.__guardia_hook_agregarOrden = true;
+
+        const original = window.agregarOrden;
+        window.agregarOrden = function (...args) {
+          const ret = original.apply(this, args);
+
+          setTimeout(() => {
+            refreshLugares();
+            renderGuardiaPreview();
+            setEstado("Lugares actualizados (guardar orden)");
+          }, 50);
+
+          return ret;
+        };
+      }
+    }
+
+    const franjasEl = document.getElementById("franjas");
+    if (franjasEl) {
+      franjasEl.addEventListener("input", () => {
+        refreshLugares();
+      });
+    }
+  }
+
   function bind() {
     if (btnGuardiaGuardar) btnGuardiaGuardar.addEventListener("click", () => onGuardarGuardia().catch(console.error));
-    if (btnGuardiaActualizar) {
-      btnGuardiaActualizar.addEventListener("click", () => onActualizarGuardia({ invLoad: null }).catch(console.error));
-    }
+    if (btnGuardiaActualizar) btnGuardiaActualizar.addEventListener("click", () => onActualizarGuardia({ invLoad: null }).catch(console.error));
 
     bindAccionesEstado();
     bindReglaCartuchosLive();
+    bindRefrescoPorGuardarOrden();
 
-    // Re-render UI cuando cambia inventario
     subscribeInventario(() => {
-      // mantiene lugares y re-render de chips
       renderGuardiaDesdeInventario();
       renderGuardiaPreview();
     });
   }
 
   async function init({ invLoad } = {}) {
-    cargarLugaresParaGuardia({ p1Lugar, p2Lugar });
+    try {
+      if (subtabs?.boot) subtabs.boot();
+    } catch {}
+
+    await onActualizarGuardia({ invLoad });
     renderGuardiaDesdeInventario();
-    await cargarGuardiaDesdeServidor();
     renderGuardiaPreview();
-
-    // Parchar handler de actualizar para que use invLoad real
-    if (btnGuardiaActualizar) {
-      btnGuardiaActualizar.onclick = null;
-      btnGuardiaActualizar.addEventListener("click", () => onActualizarGuardia({ invLoad }).catch(console.error));
-    }
-
-    if (subtabs) {
-      subtabs.boot();
-      subtabs.apply();
-    }
+    setEstado("OK");
   }
 
-  return { bind, init, cargarLugaresParaGuardia: () => cargarLugaresParaGuardia({ p1Lugar, p2Lugar }), cargarGuardiaDesdeServidor };
+  return { bind, init, refreshLugares };
 }
