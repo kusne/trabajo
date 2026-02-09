@@ -2,376 +2,117 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Administrador</title>
+  <title>Carga de Órdenes Operacionales</title>
 
-  <link rel="stylesheet" href="../funciones/estilos/base.css" />
-  <link rel="stylesheet" href="./administrador.css" />
-
-  <style>
-    .hidden { display:none !important; }
-  </style>
+  <link rel="stylesheet" href="../funciones/estilos/base.css">
+  <link rel="stylesheet" href="./administrador.css">
 </head>
 
 <body>
-  <div class="app">
-
-    <!-- LOGIN -->
-    <section id="loginContainer" class="card">
-      <h1>Administrador</h1>
-      <p class="muted">Ingresá con tu usuario.</p>
-
-      <label>Email</label>
-      <input type="email" id="loginEmail" placeholder="tu@mail.com" />
-
-      <label>Contraseña</label>
-      <input type="password" id="loginPassword" placeholder="••••••••" />
-
-      <div id="loginError" class="error" style="display:none;"></div>
-
-      <div class="row">
-        <button id="btnLogin" class="btn-primary" type="button">Ingresar</button>
-        <button id="btnForgot" class="btn-ghost" type="button">Olvidé mi contraseña</button>
-      </div>
-    </section>
-
-    <!-- ADM -->
-    <section id="admContainer" class="card" style="display:none;">
-      <div class="topbar">
-        <div class="tabs">
-          <button type="button" class="tab-btn is-active" data-tab="ordenes">Órdenes</button>
-          <button type="button" class="tab-btn" data-tab="guardia">Guardia</button>
-          <button type="button" class="tab-btn" data-tab="inventario">Inventario</button>
-          <button type="button" class="tab-btn" data-tab="libro">Libro memorándum</button>
-        </div>
-
-        <button id="btnLogout" class="btn-ghost" type="button">Cerrar sesión</button>
-      </div>
-
-      <!-- TAB: ORDENES -->
-      <section id="tab-ordenes" class="tab-panel is-active">
-        <h2>Órdenes</h2>
-
-        <label for="ordenExistente">Órdenes Cargadas</label>
-        <select id="ordenExistente"></select>
-
-        <button type="button" id="btnEliminarOrden" class="btn-danger">Eliminar Orden Seleccionada</button>
-
-        <label for="numOrden">Número de Orden</label>
-        <input type="text" id="numOrden" placeholder="Ej: OOP2344/26" required />
-
-        <label for="textoRef">Texto de referencia (opcional)</label>
-        <input type="text" id="textoRef" placeholder="Ej: Orden semanal" />
-
-        <label for="fechaVigencia">Fecha de vigencia (obligatoria)</label>
-        <input type="date" id="fechaVigencia" required />
-
-        <label for="fechaCaducidad">Fecha de caducidad (obligatoria o A FINALIZAR)</label>
-        <input type="text" id="fechaCaducidad" placeholder="Ej: 30/01/2026 o A FINALIZAR" required />
-
-        <div class="afinalizar-row">
-          <input type="checkbox" id="aFinalizarCheckbox" />
-          <span class="afinalizar-text">Marcar como “A FINALIZAR”</span>
-        </div>
-
-        <label for="franjas">Franjas (una por línea: HORARIO - LUGAR - TÍTULO)</label>
-        <textarea id="franjas" rows="6" placeholder="07 a 11 hs - RN168 km18 - Control vehicular"></textarea>
-
-        <div class="row">
-          <button type="button" class="btn-primary" onclick="agregarOrden()">Guardar / Actualizar</button>
-          <button type="button" id="btnPublicarOrdenes" class="btn-primary">Publicar Órdenes</button>
-        </div>
-      </section>
-
-      <!-- TAB: GUARDIA (AJUSTADO A guardia.js + subtabsPatrullas.js) -->
-      <section id="tab-guardia" class="tab-panel">
-        <div class="guardia-wrap">
-
-          <!-- HEADER GUARDIA -->
-          <div class="guardia-header">
-            <div class="guardia-title">
-              <h2 class="m-0">Guardia</h2>
-              <p class="muted m-0">Armar Patrulla 1 / Patrulla 2 y registrar acciones: ingreso/retiro/presente/franco/constancia.</p>
-            </div>
-
-            <div class="guardia-actions">
-              <div id="guardiaEstadoTxt" class="guardia-state">Última actualización: —</div>
-              <div class="guardia-btns">
-                <button type="button" id="btnGuardiaActualizar" class="btn-ghost">Actualizar</button>
-                <button type="button" id="btnGuardiaGuardar" class="btn-primary">Guardar Guardia</button>
-              </div>
-            </div>
-          </div>
-
-          <!-- SUBTABS -->
-          <div class="guardia-subtabs">
-            <button type="button" class="subtab-btn is-active" data-subtab="p1">Patrulla 1</button>
-            <button type="button" class="subtab-btn" data-subtab="p2">Patrulla 2</button>
-          </div>
-
-          <!-- PATRULLA 1 -->
-          <section id="patrulla-p1" class="subtab-panel is-active patrulla-card">
-            <div class="patrulla-header">
-              <h3 class="m-0">Patrulla 1</h3>
-              <div class="patrulla-actions">
-                <button type="button" class="btn-primary" data-accion="Ingreso" data-p="p1">Ingreso</button>
-                <button type="button" class="btn-ghost" data-accion="Retiro" data-p="p1">Retiro</button>
-                <button type="button" class="btn-ghost" data-accion="Presente" data-p="p1">Presente</button>
-                <button type="button" class="btn-ghost" data-accion="Franco" data-p="p1">Franco</button>
-                <button type="button" class="btn-ghost" data-accion="Constancia" data-p="p1">Constancia</button>
-              </div>
-            </div>
-
-            <div class="guardia-grid">
-
-              <div class="g-section">
-                <div class="g-section-title">Lugar / QTH</div>
-                <div class="g-section-body">
-                  <select id="p1Lugar">
-                    <option value="">Seleccionar</option>
-                  </select>
-                </div>
-              </div>
-
-              <div class="g-section">
-                <div class="g-section-title">Observaciones</div>
-                <div class="g-section-body">
-                  <textarea id="p1Obs" rows="2" placeholder="Observaciones patrulla 1..."></textarea>
-                </div>
-              </div>
-
-              <div class="g-section g-span-2">
-                <div class="g-section-title">Personal</div>
-                <div class="g-section-body">
-                  <div id="p1Personal" class="list"></div>
-                </div>
-              </div>
-
-              <div class="g-section g-span-2">
-                <div class="g-section-title">Móvil/es</div>
-                <div class="g-section-body">
-                  <div id="p1Moviles" class="list"></div>
-                </div>
-              </div>
-
-              <div class="g-section g-span-2">
-                <div class="g-section-title">Elementos</div>
-                <div class="g-section-body">
-                  <div id="p1Elementos" class="list"></div>
-                </div>
-              </div>
-
-              <div class="g-section g-span-2">
-                <div class="g-section-title">Cartuchos (solo si hay escopeta)</div>
-                <div class="g-section-body">
-                  <div id="p1Cartuchos" class="list"></div>
-                </div>
-              </div>
-
-            </div>
-          </section>
-
-          <!-- PATRULLA 2 -->
-          <section id="patrulla-p2" class="subtab-panel patrulla-card" style="display:none;">
-            <div class="patrulla-header">
-              <h3 class="m-0">Patrulla 2</h3>
-              <div class="patrulla-actions">
-                <button type="button" class="btn-primary" data-accion="Ingreso" data-p="p2">Ingreso</button>
-                <button type="button" class="btn-ghost" data-accion="Retiro" data-p="p2">Retiro</button>
-                <button type="button" class="btn-ghost" data-accion="Presente" data-p="p2">Presente</button>
-                <button type="button" class="btn-ghost" data-accion="Franco" data-p="p2">Franco</button>
-                <button type="button" class="btn-ghost" data-accion="Constancia" data-p="p2">Constancia</button>
-              </div>
-            </div>
-
-            <div class="guardia-grid">
-
-              <div class="g-section">
-                <div class="g-section-title">Lugar / QTH</div>
-                <div class="g-section-body">
-                  <select id="p2Lugar">
-                    <option value="">Seleccionar</option>
-                  </select>
-                </div>
-              </div>
-
-              <div class="g-section">
-                <div class="g-section-title">Observaciones</div>
-                <div class="g-section-body">
-                  <textarea id="p2Obs" rows="2" placeholder="Observaciones patrulla 2..."></textarea>
-                </div>
-              </div>
-
-              <div class="g-section g-span-2">
-                <div class="g-section-title">Personal</div>
-                <div class="g-section-body">
-                  <div id="p2Personal" class="list"></div>
-                </div>
-              </div>
-
-              <div class="g-section g-span-2">
-                <div class="g-section-title">Móvil/es</div>
-                <div class="g-section-body">
-                  <div id="p2Moviles" class="list"></div>
-                </div>
-              </div>
-
-              <div class="g-section g-span-2">
-                <div class="g-section-title">Elementos</div>
-                <div class="g-section-body">
-                  <div id="p2Elementos" class="list"></div>
-                </div>
-              </div>
-
-              <div class="g-section g-span-2">
-                <div class="g-section-title">Cartuchos (solo si hay escopeta)</div>
-                <div class="g-section-body">
-                  <div id="p2Cartuchos" class="list"></div>
-                </div>
-              </div>
-
-            </div>
-          </section>
-
-          <!-- PREVIEW JSON -->
-          <div class="g-preview">
-            <div class="g-section-title">Salida JSON (preview)</div>
-            <pre id="guardiaJsonPreview" class="json-preview">{}</pre>
-          </div>
-
-        </div>
-      </section>
-
-
-    
-      <!-- TAB: INVENTARIO -->
-      <section id="tab-inventario" class="tab-panel">
-        <h2>Inventario</h2>
-
-        <div class="card" style="padding:14px; margin-bottom:12px;">
-          <div class="row">
-            <div style="flex:1; min-width:220px;">
-              <label for="invTipo">Tipo</label>
-              <select id="invTipo">
-                <option value="personal">Personal</option>
-                <option value="movil">Móvil</option>
-                <option value="elemento">Elemento</option>
-              </select>
-            </div>
-
-            <div style="flex:1; min-width:220px;">
-              <label for="invLabel">Etiqueta</label>
-              <input id="invLabel" type="text" placeholder="Ej: Subof. Pérez" />
-            </div>
-
-            <div style="flex:1; min-width:220px;">
-              <label for="invValue">Valor (ID)</label>
-              <input id="invValue" type="text" placeholder="Ej: perez_subof" />
-            </div>
-          </div>
-
-          <div class="row" style="margin-top:10px;">
-            <div style="flex:1; min-width:180px;">
-              <label for="invOrden">Orden</label>
-              <input id="invOrden" type="number" placeholder="Ej: 10" />
-            </div>
-
-            <div style="flex:1; min-width:220px;">
-              <label for="invSubgrupo">Subgrupo (solo Elementos)</label>
-              <input id="invSubgrupo" type="text" placeholder="Ej: Impresoras / PDAs / Escopetas" />
-            </div>
-
-            <div style="flex:2; min-width:260px;">
-              <label for="invMetaExtra">Meta extra (JSON opcional)</label>
-              <input id="invMetaExtra" type="text" placeholder='Ej: {"subgrupo":"pdas"}' />
-            </div>
-          </div>
-
-          <div class="row" style="margin-top:12px; justify-content:flex-end;">
-            <button type="button" id="btnInvRefrescar" class="btn-ghost">Refrescar</button>
-            <button type="button" id="btnInvAgregar" class="btn-primary">Agregar / Actualizar</button>
-          </div>
-
-          <div id="invEstado" class="muted" style="margin-top:10px;">—</div>
-        </div>
-
-        <div id="invLista"></div>
-      </section>
-
-
-      <!-- TAB: LIBRO MEMORÁNDUM -->
-      <section id="tab-libro" class="tab-panel">
-        <h2>Libro Memorándum</h2>
-
-        <div class="card" style="padding:14px; margin-bottom:12px;">
-          <div class="row">
-            <div style="flex:1; min-width:220px;">
-              <label for="memoCausa">Causa</label>
-              <select id="memoCausa">
-                <option value="">Seleccionar</option>
-                <option value="Ingreso">Ingreso</option>
-                <option value="Retiro">Retiro</option>
-                <option value="Presente">Presente</option>
-                <option value="Franco">Franco</option>
-                <option value="Constancia">Constancia</option>
-                <option value="Novedad">Novedad</option>
-              </select>
-            </div>
-
-            <div style="width:180px; min-width:180px;">
-              <label for="memoHora">Hora</label>
-              <input id="memoHora" type="time" />
-            </div>
-          </div>
-
-          <label for="memoNovedad" style="margin-top:10px;">Novedad</label>
-          <textarea id="memoNovedad" rows="3" placeholder="Escribí la novedad..."></textarea>
-
-          <div class="row" style="margin-top:12px; justify-content:flex-end;">
-            <button type="button" id="btnLibroLimpiar" class="btn-ghost">Limpiar</button>
-            <button type="button" id="btnLibroAgregar" class="btn-primary">Agregar</button>
-          </div>
-        </div>
-
-        <div class="card" style="padding:14px; margin-bottom:12px;">
-          <div style="overflow:auto;">
-            <table style="width:100%; border-collapse:collapse;">
-              <thead>
-                <tr>
-                  <th style="text-align:left; padding:8px; border-bottom:1px solid rgba(0,0,0,.10);">Causa</th>
-                  <th style="text-align:left; padding:8px; border-bottom:1px solid rgba(0,0,0,.10); width:120px;">Hora</th>
-                  <th style="text-align:left; padding:8px; border-bottom:1px solid rgba(0,0,0,.10);">Novedad</th>
-                </tr>
-              </thead>
-              <tbody id="memoTbody"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <div class="card" style="padding:14px;">
-          <div class="muted" style="margin-bottom:8px;">Salida JSON (preview)</div>
-          <pre id="libroJsonPreview" class="json-preview">{}</pre>
-        </div>
-      </section>
-
-<!-- shared scripts (orden correcto) -->
-    <script src="../funciones/js/storage.js"></script>
-    <script src="../funciones/js/dom.js"></script>
-    <script src="../funciones/js/uiValidacion.js"></script>
-    <script src="../funciones/js/datos.js"></script>
-    <script src="../funciones/js/ordersSync.js"></script>
-    <script src="../funciones/js/eliminacion.js"></script>
-    <script src="../funciones/js/caducidad.js"></script>
-
-    <!-- Supabase -->
-    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-
-    <!-- adm -->
-    <script type="module" src="./administrador.js"></script>
-
+  <!-- LOGIN ADM -->
+  <div id="loginContainer" style="max-width:320px; margin:40px auto; display:none;">
+    <h3>Acceso Administrador</h3>
+
+    <label>Email</label>
+    <input type="email" id="loginEmail">
+
+    <label>Contraseña</label>
+    <input type="password" id="loginPassword">
+
+    <button type="button" id="btnLogin">Ingresar</button>
+    <button type="button" id="btnForgot">Olvidé mi contraseña</button>
+    <p id="loginError" style="color:red; display:none;"></p>
   </div>
+
+  <div class="app" id="admContainer" style="display:none;">
+    <div style="text-align: right; margin-bottom: 10px;">
+      <button id="btnLogout">Cerrar sesión</button>
+    </div>
+
+    <h2>Formulario de Carga de Órdenes Operacionales</h2>
+
+    <label for="numOrden">Número de Orden</label>
+    <input type="text" id="numOrden" placeholder="Ej: OOP2344/26" required>
+
+    <label for="textoRef">Texto de Referencia (opcional)</label>
+    <input type="text" id="textoRef" placeholder="Ej: Orden semanal">
+
+    <label for="fechaVigencia">Fecha de Vigencia (obligatoria)</label>
+    <input type="date" id="fechaVigencia" required>
+
+    <label for="franjas">Franjas horarias (una por línea: HORARIO - LUGAR - TÍTULO)</label>
+    <textarea id="franjas" rows="6" required
+      placeholder="01 a 06 hs - Puente Carretero Cabecera Santo Tomé - Presencia Activa
+01 a 03 hs - RN168 KM18 - Control Vehicular"></textarea>
+
+    <div class="caducidad-container">
+      <label for="fechaCaducidad">Fecha de Caducidad (obligatoria)</label>
+      <input type="text" id="fechaCaducidad" required placeholder="DD/MM/AAAA o A FINALIZAR">
+
+      <div class="checkbox-row">
+        <label class="checkbox-container" for="aFinalizarCheckbox">
+          <input type="checkbox" id="aFinalizarCheckbox">
+          <span>A FINALIZAR</span>
+        </label>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:10px; align-items:center;">
+      <button type="button" onclick="agregarOrden()">
+        Agregar / Actualizar Orden
+      </button>
+
+      <button type="button" id="btnPublicarOrdenes" onclick="publicarOrdenes()"
+        style="background:#2e7d32; color:white; font-weight:bold;">
+        Publicar órdenes
+      </button>
+    </div>
+
+    <hr>
+
+    <h3>Órdenes Cargadas</h3>
+    <select id="ordenExistente" size="6"></select>
+    <button type="button" onclick="eliminarOrden()">Eliminar Orden Seleccionada</button>
+
+    <div id="infoOrden"></div>
+  </div>
+
+  <!-- shared scripts -->
+  <script src="../funciones/js/storage.js"></script>
+  <script src="../funciones/js/dom.js"></script>
+  <script src="../funciones/js/uiValidacion.js"></script>
+  <script src="../funciones/js/datos.js"></script>
+  <script src="../funciones/js/ordersSync.js"></script>
+  <script src="../funciones/js/eliminacion.js"></script>
+  <script src="../funciones/js/caducidad.js"></script>
+
+  <!-- Supabase -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+  <!-- adm -->
+  <script src="./administrador.js"></script>
 </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
