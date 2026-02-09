@@ -697,6 +697,37 @@ textarea{
 #tab-guardia .row-inline .mini{
   flex: 0 0 220px;
 }
+/* =========================
+   FIX layout MOVILES (Guardia)
+   Numero a la izquierda de Libro/TVF
+   ========================= */
+
+#tab-guardia .row-inline{
+  justify-content: flex-start !important;
+  flex-wrap: nowrap !important;
+}
+
+/* el número/nombre del móvil: queda pegado al checkbox, NO centrado */
+#tab-guardia .row-inline .movil-name{
+  display: inline-flex !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-weight: 700;
+  flex: 0 0 auto !important;      /* NO “flex:1” */
+  min-width: 70px;               /* para que no se achique */
+  white-space: nowrap;
+}
+
+/* flags (Libro/TVF) quedan a la derecha del número */
+#tab-guardia .row-inline .mov-flags{
+  flex: 0 0 auto !important;
+}
+
+/* Obs se va a la derecha del todo (empuja lo anterior a la izquierda) */
+#tab-guardia .row-inline .mini{
+  margin-left: auto !important;
+}
+
 
 
 
