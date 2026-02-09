@@ -96,7 +96,7 @@ textarea{
   flex-wrap: wrap;
 }
 
-/* ✅ Cambio 1: btn-primary con look consistente + disabled */
+/* ✅ Botones base */
 .btn-primary{
   padding:10px 14px;
   border-radius:12px;
@@ -148,7 +148,7 @@ textarea{
   background: rgba(255,255,255,.6);
 }
 
-/* ✅ Cambio 3: json-preview con max-height para móvil */
+/* ✅ json-preview */
 .json-preview{
   background:#0f172a;
   color:#e5e7eb;
@@ -187,7 +187,7 @@ textarea{
   margin-bottom:6px;
 }
 
-/* ===== ADDED: Libro memorándum (3 columnas + tabla) ===== */
+/* ===== Libro memorándum (3 columnas + tabla) ===== */
 .grid-3col{
   display:grid;
   grid-template-columns: 220px 160px 1fr;
@@ -239,7 +239,7 @@ textarea{
   margin: 0;
 }
 
-/* ✅ Cambio 2: cuando el <td> tiene class="muted" (no un <div> adentro) */
+/* ✅ cuando el <td> tiene class="muted" */
 .table td.muted{
   opacity: .7;
 }
@@ -266,6 +266,7 @@ textarea{
   width: 1%;
   text-align: right;
 }
+
 /* =========================
    GUARDIA - layout premium
    ========================= */
@@ -374,10 +375,8 @@ textarea{
 }
 
 .g-section{
-  border: 1px solid rgba(0,0,0,.10);
-  border-radius: 14px;
+  border-radius: 16px;
   overflow:hidden;
-  background: rgba(255,255,255,.60);
 }
 
 .g-section-title{
@@ -386,7 +385,6 @@ textarea{
   opacity: .85;
   padding: 10px 12px;
   border-bottom: 1px solid rgba(0,0,0,.08);
-  background: rgba(255,255,255,.55);
 }
 
 .g-section-body{
@@ -432,8 +430,6 @@ textarea{
   display:inline-flex;
   align-items:center;
   gap: 8px;
-  border: 1px solid rgba(0,0,0,.12);
-  background: rgba(255,255,255,.70);
   padding: 8px 10px;
   border-radius: 999px;
   cursor: pointer;
@@ -450,21 +446,18 @@ textarea{
   align-items:center;
   gap: 10px;
   padding: 8px 10px;
-  border: 1px solid rgba(0,0,0,.10);
   border-radius: 14px;
-  background: rgba(255,255,255,.70);
 }
 
 .row-inline .mini{
   width: 220px;
 }
+
 /* ======================================================
    COLORES SUAVES - Guardia (botones + chips)
-   (pegalo al FINAL del administrador.css)
    ====================================================== */
 
 :root{
-  /* paleta suave (background + borde + texto) */
   --soft-blue-bg: rgba(59,130,246,.14);
   --soft-blue-bd: rgba(59,130,246,.32);
   --soft-blue-tx: rgba(30,64,175,.95);
@@ -492,9 +485,7 @@ textarea{
   --soft-shadow: 0 10px 22px rgba(0,0,0,.08);
 }
 
-/* ------------------------------
-   Micro-animaciones (solo Guardia)
-   ------------------------------ */
+/* Micro-animaciones (solo Guardia) */
 #tab-guardia button,
 #tab-guardia .chip{
   transition: transform .12s ease, box-shadow .12s ease, background-color .12s ease, border-color .12s ease;
@@ -504,14 +495,13 @@ textarea{
   transform: translateY(-1px);
   box-shadow: var(--soft-shadow);
 }
+
 #tab-guardia button:active{
   transform: translateY(0);
   box-shadow: 0 6px 14px rgba(0,0,0,.06);
 }
 
-/* ------------------------------
-   Botones header Guardia
-   ------------------------------ */
+/* Header Guardia */
 #tab-guardia #btnGuardiaActualizar{
   background: var(--soft-cyan-bg);
   border-color: var(--soft-cyan-bd);
@@ -524,23 +514,19 @@ textarea{
   color: var(--soft-blue-tx) !important;
 }
 
-/* ------------------------------
-   Subtabs Patrulla 1 / 2
-   ------------------------------ */
+/* Subtabs */
 #tab-guardia .subtab-btn{
   background: rgba(255,255,255,.75);
   border-color: rgba(0,0,0,.12);
 }
+
 #tab-guardia .subtab-btn.is-active{
   background: var(--soft-blue-bg);
   border-color: var(--soft-blue-bd);
   color: var(--soft-blue-tx);
 }
 
-/* ------------------------------
-   Botones acciones por patrulla
-   (según data-accion)
-   ------------------------------ */
+/* Acciones patrulla */
 #tab-guardia .patrulla-actions button[data-accion="Ingreso"]{
   background: var(--soft-blue-bg) !important;
   border: 1px solid var(--soft-blue-bd) !important;
@@ -571,15 +557,10 @@ textarea{
   color: var(--soft-gray-tx);
 }
 
-/* ------------------------------
-   Chips (personal / elementos / cartuchos)
-   ------------------------------ */
+/* Chips base */
 #tab-guardia .chip{
-  border: 1px solid rgba(0,0,0,.12);
-  background: rgba(255,255,255,.75);
-  border-radius: 999px;
-  padding: 8px 10px;
-  cursor: pointer;
+  border: 1px solid rgba(94, 80, 63, .20);
+  background: rgba(255,255,255,.72);
 }
 
 #tab-guardia .chip:hover{
@@ -587,132 +568,56 @@ textarea{
   box-shadow: 0 10px 18px rgba(0,0,0,.07);
 }
 
-/* ✅ Chip “seleccionado” (checkbox marcado) */
+/* Chip seleccionado */
 #tab-guardia .chip:has(input[type="checkbox"]:checked){
   background: var(--soft-blue-bg);
   border-color: var(--soft-blue-bd);
   color: var(--soft-blue-tx);
 }
 
-/* fallback si :has() no está soportado (Safari viejo):
-   el input queda visible igual y no rompe nada */
+/* Checkbox */
 #tab-guardia .chip input[type="checkbox"]{
   accent-color: rgba(59,130,246,.85);
 }
 
-/* Row de móviles (checkbox + label + obs) */
+/* Row-inline (móviles) */
 #tab-guardia .row-inline{
-  border: 1px solid rgba(0,0,0,.10);
-  background: rgba(255,255,255,.75);
-  border-radius: 14px;
+  border: 1px solid rgba(94, 80, 63, .18);
+  background: rgba(255,255,255,.72);
 }
+
 #tab-guardia .row-inline:has(input[type="checkbox"]:checked){
   background: var(--soft-blue-bg);
   border-color: var(--soft-blue-bd);
 }
+
 /* ======================================================
-   FONDOS SUAVES POR SECCIÓN - Guardia
-   (Lugar/Obs/Personal/Móviles/Elementos/Cartuchos)
-   ====================================================== */
-
-/* fondo general de cada sección (card dentro de la card) */
-#tab-guardia .g-section{
-  background: rgba(255,255,255,.62);
-  border: 1px solid rgba(15,23,42,.10);
-  box-shadow: 0 6px 16px rgba(0,0,0,.05);
-}
-
-/* header de cada sección: leve tinte azulado */
-#tab-guardia .g-section-title{
-  background: rgba(59,130,246,.07);
-  border-bottom: 1px solid rgba(15,23,42,.08);
-}
-
-/* Lugar + Observaciones: un toque cian (neutral, no cansa) */
-#tab-guardia .g-section:has(#p1Lugar),
-#tab-guardia .g-section:has(#p2Lugar),
-#tab-guardia .g-section:has(#p1Obs),
-#tab-guardia .g-section:has(#p2Obs){
-  background: rgba(14,165,233,.06);
-  border-color: rgba(14,165,233,.16);
-}
-
-/* Personal: leve verde (resalta personas, descansado) */
-#tab-guardia .g-section:has(#p1Personal),
-#tab-guardia .g-section:has(#p2Personal){
-  background: rgba(34,197,94,.06);
-  border-color: rgba(34,197,94,.16);
-}
-
-/* Móviles: leve ámbar/naranja (sin saturar) */
-#tab-guardia .g-section:has(#p1Moviles),
-#tab-guardia .g-section:has(#p2Moviles){
-  background: rgba(249,115,22,.06);
-  border-color: rgba(249,115,22,.16);
-}
-
-/* Elementos: leve violeta (diferencia visual clara) */
-#tab-guardia .g-section:has(#p1Elementos),
-#tab-guardia .g-section:has(#p2Elementos){
-  background: rgba(168,85,247,.06);
-  border-color: rgba(168,85,247,.16);
-}
-
-/* Cartuchos: gris suave */
-#tab-guardia .g-section:has(#p1Cartuchos),
-#tab-guardia .g-section:has(#p2Cartuchos){
-  background: rgba(100,116,139,.06);
-  border-color: rgba(100,116,139,.16);
-}
-
-/* mejor legibilidad interna */
-#tab-guardia .g-section-body{
-  background: rgba(255,255,255,.40);
-  border-radius: 12px;
-}
-
-/* inputs/select/textarea: “premium” pero suave */
-#tab-guardia select,
-#tab-guardia textarea,
-#tab-guardia input[type="text"]{
-  background: rgba(255,255,255,.80);
-  border: 1px solid rgba(15,23,42,.12);
-  border-radius: 12px;
-}
-#tab-guardia select:focus,
-#tab-guardia textarea:focus,
-#tab-guardia input[type="text"]:focus{
-  outline: none;
-  border-color: rgba(59,130,246,.35);
-  box-shadow: 0 0 0 4px rgba(59,130,246,.12);
-}
-/* ======================================================
-   GUARDIA - Panel único más oscuro (mismo color en todo)
+   ✅ PANEL ARENA (INTERMEDIO/FUERTE) - MISMO COLOR EN TODAS LAS SECCIONES
    Envuelve: título + contenido + chips + inputs
    ====================================================== */
 
 #tab-guardia .g-section{
-  /* fondo más oscuro pero descansado (kraft suave) */
-  background: rgba(204, 188, 168, .96);
-  border: 1px solid rgba(94, 80, 63, .22);
+  /* Arena intermedio/fuerte (ajustable) */
+  background: rgba(214, 200, 182, .96);
+  border: 1px solid rgba(94, 80, 63, .24);
   border-radius: 16px;
-  overflow: hidden; /* el fondo envuelve todo el bloque */
+  overflow: hidden;
   box-shadow: 0 10px 22px rgba(0,0,0,.06);
 }
 
-/* título: MISMO COLOR que el panel (sin banda diferente) */
+/* El título queda del mismo color que el panel */
 #tab-guardia .g-section-title{
-  background: transparent;             /* mismo fondo que el panel */
+  background: transparent;
   border-bottom: 1px solid rgba(94, 80, 63, .16);
   color: rgba(30, 20, 10, .92);
 }
 
-/* body: transparente para que sea el MISMO color en todo */
+/* Body transparente (misma arena en todo) */
 #tab-guardia .g-section-body{
   background: transparent;
 }
 
-/* inputs “flotantes” arriba del panel */
+/* Inputs flotantes sobre arena (no azul) */
 #tab-guardia select,
 #tab-guardia textarea,
 #tab-guardia input[type="text"]{
@@ -721,24 +626,12 @@ textarea{
   border-radius: 12px;
 }
 
-/* foco sobrio (no azul) */
 #tab-guardia select:focus,
 #tab-guardia textarea:focus,
 #tab-guardia input[type="text"]:focus{
   outline: none;
   border-color: rgba(94, 80, 63, .38);
   box-shadow: 0 0 0 4px rgba(94, 80, 63, .14);
-}
-
-/* chips: un poco más “papel” para que contrasten sin cansar */
-#tab-guardia .chip{
-  background: rgba(255,255,255,.72);
-  border: 1px solid rgba(94, 80, 63, .20);
-}
-
-#tab-guardia .row-inline{
-  background: rgba(255,255,255,.72);
-  border: 1px solid rgba(94, 80, 63, .18);
 }
 
 
