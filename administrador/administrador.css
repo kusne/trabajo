@@ -687,45 +687,58 @@ textarea{
   box-shadow: 0 0 0 4px rgba(59,130,246,.12);
 }
 /* ======================================================
-   GUARDIA - Fondo único neutro (no azul/celeste)
-   para TODOS los bloques (g-section)
+   GUARDIA - Panel único más oscuro (mismo color en todo)
+   Envuelve: título + contenido + chips + inputs
    ====================================================== */
 
 #tab-guardia .g-section{
-  /* tono arena muy suave */
-  background: rgba(245, 240, 232, .92);
-  border: 1px solid rgba(120, 113, 108, .18); /* borde “piedra” */
+  /* fondo más oscuro pero descansado (kraft suave) */
+  background: rgba(224, 213, 198, .95);
+  border: 1px solid rgba(94, 80, 63, .22);
   border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 8px 18px rgba(0,0,0,.05);
+  overflow: hidden; /* el fondo envuelve todo el bloque */
+  box-shadow: 0 10px 22px rgba(0,0,0,.06);
 }
 
+/* título: MISMO COLOR que el panel (sin banda diferente) */
 #tab-guardia .g-section-title{
-  /* un poco más oscuro para separar sin cansar */
-  background: rgba(235, 228, 218, .85);
-  border-bottom: 1px solid rgba(120, 113, 108, .16);
+  background: transparent;             /* mismo fondo que el panel */
+  border-bottom: 1px solid rgba(94, 80, 63, .16);
+  color: rgba(30, 20, 10, .92);
 }
 
+/* body: transparente para que sea el MISMO color en todo */
 #tab-guardia .g-section-body{
-  /* velo interno para que chips/inputs contrasten */
-  background: rgba(255,255,255,.18);
+  background: transparent;
 }
 
-/* inputs dentro de Guardia: “flotantes” */
+/* inputs “flotantes” arriba del panel */
 #tab-guardia select,
 #tab-guardia textarea,
 #tab-guardia input[type="text"]{
   background: rgba(255,255,255,.86);
-  border: 1px solid rgba(120, 113, 108, .20);
+  border: 1px solid rgba(94, 80, 63, .22);
   border-radius: 12px;
 }
 
+/* foco sobrio (no azul) */
 #tab-guardia select:focus,
 #tab-guardia textarea:focus,
 #tab-guardia input[type="text"]:focus{
   outline: none;
-  border-color: rgba(120, 113, 108, .35);
-  box-shadow: 0 0 0 4px rgba(120, 113, 108, .14);
+  border-color: rgba(94, 80, 63, .38);
+  box-shadow: 0 0 0 4px rgba(94, 80, 63, .14);
+}
+
+/* chips: un poco más “papel” para que contrasten sin cansar */
+#tab-guardia .chip{
+  background: rgba(255,255,255,.72);
+  border: 1px solid rgba(94, 80, 63, .20);
+}
+
+#tab-guardia .row-inline{
+  background: rgba(255,255,255,.72);
+  border: 1px solid rgba(94, 80, 63, .18);
 }
 
 
