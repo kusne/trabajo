@@ -640,6 +640,33 @@ textarea{
   border-color: rgba(94, 80, 63, .38);
   box-shadow: 0 0 0 4px rgba(94, 80, 63, .14);
 }
+/* Moviles: label a la izquierda + flags prolijos */
+#tab-guardia .row-inline .movil-name{
+  flex: 1;
+  margin: 0;          /* evita spacing raro del <label> global */
+  font-weight: 700;
+}
+
+#tab-guardia .row-inline .mov-flags{
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+
+#tab-guardia .row-inline .mov-flag{
+  display:inline-flex;
+  gap:6px;
+  align-items:center;
+  font-size: 12px;
+  opacity: .95;
+  user-select:none;
+}
+
+#tab-guardia .row-inline .mov-flag input{
+  width:auto;
+  margin:0;
+}
+
 
 
 
