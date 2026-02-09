@@ -99,12 +99,46 @@ function renderChips(container, items, checkedValues = []) {
   });
 }
 
+/* ======================================================
+   ✅ MOVILES (con Libro/TVF por retiro + label a la izquierda)
+   Estructura guardada:
+   { movil_id, obs, libro, tvf }
+   ====================================================== */
+
 function renderMoviles(container, items, selected = []) {
   if (!container) return;
   container.innerHTML = "";
 
-  // un móvil seleccionado = { movil_id, obs }
-  const selectedIds = new Set(selected.map((x) => x.movil_id));
+  // normaliza selected (compat: viejos sin libro/tvf)
+  const selectedMap = new Map(
+    (Array.isArray(selected) ? selected : []).map((x) => [
+      x?.movil_id,
+      {
+        movil_id: x?.movil_id,
+        obs: (x?.obs || "").trim(),
+        libro: !!x?.libro,
+        tvf: !!x?.tvf,
+      },
+    ])
+  );
+
+  function mkFlag(labelTxt, dataFlag, checked, disabled) {
+    const wrap = document.createElement("label");
+    wrap.className = "mov-flag"; // (css opcional)
+
+    const c = document.createElement("input");
+    c.type = "checkbox";
+    c.checked = !!checked;
+    c.disabled = !!disabled;
+    c.setAttribute("data-flag", dataFlag);
+
+    const t = document.createElement("span");
+    t.textContent = labelTxt;
+
+    wrap.appendChild(c);
+    wrap.appendChild(t);
+    return wrap;
+  }
 
   items.forEach((it) => {
     const row = document.createElement("div");
@@ -112,31 +146,61 @@ function renderMoviles(container, items, selected = []) {
 
     const id = `mov_${slugifyValue(it.value)}_${Math.random().toString(16).slice(2)}`;
 
+    const saved = selectedMap.get(it.value) || { movil_id: it.value, obs: "", libro: false, tvf: false };
+    const isSelected = selectedMap.has(it.value);
+
+    // checkbox principal (selección del móvil)
     const chk = document.createElement("input");
     chk.type = "checkbox";
     chk.id = id;
-    chk.checked = selectedIds.has(it.value);
+    chk.checked = isSelected;
     chk.setAttribute("data-value", it.value);
 
-    const label = document.createElement("label");
-    label.setAttribute("for", id);
-    label.textContent = it.label;
+    // ✅ label/número del móvil a la izquierda (con flex)
+    const name = document.createElement("label");
+    name.setAttribute("for", id);
+    name.className = "movil-name";
+    name.textContent = it.label;
 
+    // flags (Libro / TVF) a la derecha
+    const flags = document.createElement("div");
+    flags.className = "mov-flags";
+
+    const flagLibro = mkFlag("Libro", "libro", saved.libro, !chk.checked);
+    const flagTvf = mkFlag("TVF", "tvf", saved.tvf, !chk.checked);
+
+    flags.appendChild(flagLibro);
+    flags.appendChild(flagTvf);
+
+    // obs (opcional) a la derecha
     const obs = document.createElement("input");
     obs.type = "text";
     obs.placeholder = "Obs (opcional)";
     obs.className = "mini";
-    const found = selected.find((x) => x.movil_id === it.value);
-    obs.value = found?.obs || "";
+    obs.value = saved.obs || "";
     obs.disabled = !chk.checked;
 
-    chk.addEventListener("change", () => {
-      obs.disabled = !chk.checked;
-      if (!chk.checked) obs.value = "";
-    });
+    // cuando se destilda el móvil: bloquear flags + limpiar
+    const syncEnabled = () => {
+      const enabled = chk.checked;
 
+      obs.disabled = !enabled;
+      if (!enabled) obs.value = "";
+
+      flags.querySelectorAll('input[type="checkbox"][data-flag]').forEach((c) => {
+        c.disabled = !enabled;
+        if (!enabled) c.checked = false;
+      });
+    };
+
+    chk.addEventListener("change", () => syncEnabled());
+    syncEnabled();
+
+    // Orden final en la fila:
+    // [chk] [NOMBRE IZQ] [flags der] [obs der]
     row.appendChild(chk);
-    row.appendChild(label);
+    row.appendChild(name);
+    row.appendChild(flags);
     row.appendChild(obs);
 
     container.appendChild(row);
@@ -147,20 +211,31 @@ function readMoviles(container) {
   if (!container) return [];
   const rows = Array.from(container.querySelectorAll(".row-inline"));
   const out = [];
+
   rows.forEach((row) => {
-    const chk = row.querySelector("input[type=checkbox][data-value]");
-    const obs = row.querySelector("input[type=text]");
-    if (chk?.checked) {
-      out.push({ movil_id: chk.getAttribute("data-value"), obs: (obs?.value || "").trim() });
-    }
+    const chk = row.querySelector('input[type="checkbox"][data-value]');
+    if (!chk?.checked) return;
+
+    const movil_id = chk.getAttribute("data-value");
+
+    const obs = row.querySelector('input[type="text"]');
+    const libro = row.querySelector('input[type="checkbox"][data-flag="libro"]');
+    const tvf = row.querySelector('input[type="checkbox"][data-flag="tvf"]');
+
+    out.push({
+      movil_id,
+      obs: (obs?.value || "").trim(),
+      libro: !!libro?.checked,
+      tvf: !!tvf?.checked,
+    });
   });
+
   return out;
 }
 
 function aplicarReglaCartuchos(elementosContainer, cartuchosContainer, precomputedElementosIds = null) {
   if (!elementosContainer || !cartuchosContainer) return;
 
-  // Si hay escopetas seleccionadas => habilitar cartuchos
   const elementosIds = precomputedElementosIds || readCheckedValues(elementosContainer);
   const hayEscopeta = elementosIds.some((id) => {
     const label = invLabelFromValue("elemento", id).toLowerCase();
@@ -168,7 +243,6 @@ function aplicarReglaCartuchos(elementosContainer, cartuchosContainer, precomput
   });
 
   cartuchosContainer.style.display = hayEscopeta ? "block" : "none";
-  // si no hay escopeta, desmarcar todo
   if (!hayEscopeta) {
     cartuchosContainer.querySelectorAll("input[type=checkbox]").forEach((c) => (c.checked = false));
   }
@@ -221,12 +295,6 @@ function formatLogEntry(e) {
   return `${ts} ${p} ${a}: ${r}`;
 }
 
-/**
- * Parser de lugares desde el textarea #franjas (Órdenes)
- * Acepta líneas tipo:
- * "07 a 11 hs - RN168 km18 - Control vehicular"
- * y variantes con guiones.
- */
 function getLugaresFromFranjasTextarea() {
   const t = document.getElementById("franjas")?.value || "";
   const out = new Set();
@@ -248,9 +316,6 @@ function getLugaresFromFranjasTextarea() {
   return Array.from(out).sort((a, b) => a.localeCompare(b));
 }
 
-/**
- * Lugares desde state.ordenes (si existen)
- */
 function getLugaresFromOrdenes() {
   const out = new Set();
   const ords = Array.isArray(state?.ordenes) ? state.ordenes : [];
@@ -264,11 +329,6 @@ function getLugaresFromOrdenes() {
   return Array.from(out).sort((a, b) => a.localeCompare(b));
 }
 
-/**
- * ✅ NUEVO: leer TODAS las órdenes guardadas (aunque no estén seleccionadas)
- * 1) intenta métodos de storageApp
- * 2) si no existen, intenta localStorage keys comunes
- */
 function tryGetOrdenesFromStorageApp() {
   try {
     const sa = window.storageApp;
@@ -279,7 +339,6 @@ function tryGetOrdenesFromStorageApp() {
       if (Array.isArray(sa.ordenes)) return sa.ordenes || [];
     }
 
-    // fallback suave a localStorage (keys típicas; si no están, no rompe)
     const keys = [
       "ordenes_operacionales",
       "ordenesOperacionales",
@@ -304,12 +363,6 @@ function tryGetOrdenesFromStorageApp() {
   }
 }
 
-/**
- * ✅ NUEVO: extraer lugares desde un array de órdenes guardadas
- * Soporta:
- * - o.franjas[] con { lugar }
- * - o.franjasTexto / o.franjas_texto (string con líneas HORARIO - LUGAR - TITULO)
- */
 function extractLugaresFromOrdenesArray(ords) {
   const out = new Set();
 
@@ -339,12 +392,6 @@ function extractLugaresFromOrdenesArray(ords) {
   return Array.from(out).sort((a, b) => a.localeCompare(b));
 }
 
-/**
- * ✅ NUEVO: lugares SMART
- * 1) usa state.ordenes si tiene data
- * 2) si no, usa TODAS las órdenes guardadas (storageApp / localStorage)
- * 3) si no, usa #franjas
- */
 function getLugaresSmart() {
   const fromState = getLugaresFromOrdenes();
   if (fromState.length) return fromState;
@@ -420,6 +467,7 @@ export function initGuardia({ sb, subtabs } = {}) {
     renderChips(p1Personal, pers, p1.personal_ids || []);
     renderChips(p2Personal, pers, p2.personal_ids || []);
 
+    // ✅ Moviles con {libro,tvf}
     renderMoviles(p1Moviles, movs, p1.moviles || []);
     renderMoviles(p2Moviles, movs, p2.moviles || []);
 
@@ -479,6 +527,7 @@ export function initGuardia({ sb, subtabs } = {}) {
     const p1PersonalIds = readCheckedValues(p1Personal);
     const p2PersonalIds = readCheckedValues(p2Personal);
 
+    // ✅ ahora devuelve {movil_id, obs, libro, tvf}
     const p1Mov = readMoviles(p1Moviles);
     const p2Mov = readMoviles(p2Moviles);
 
@@ -598,7 +647,10 @@ export function initGuardia({ sb, subtabs } = {}) {
 
         const pat = next.patrullas[p];
         const perTxt = (pat.personal_ids || []).map((id) => invLabelFromValue("personal", id)).join(", ");
+
+        // ✅ incluir libro/tvf en texto si querés (por ahora no lo agrego para no ensuciar)
         const movTxt = (pat.moviles || []).map((m) => invLabelFromValue("movil", m.movil_id)).join(", ");
+
         const elemTxt = (pat.elementos_ids || []).map((id) => invLabelFromValue("elemento", id)).join(", ");
 
         const resumen = `Personal: ${perTxt || "-"} | Movil(es): ${movTxt || "-"} | Elementos: ${elemTxt || "-"}`;
@@ -635,11 +687,6 @@ export function initGuardia({ sb, subtabs } = {}) {
     hook(p2Elementos, p2Cartuchos);
   }
 
-  /**
-   * refrescar lugares cuando se GUARDA una orden (botón guardar órdenes)
-   * - Caso 1: botón con onclick="agregarOrden()"
-   * - Caso 2: hook al wrapper global window.agregarOrden (sin romper nada)
-   */
   function bindRefrescoPorGuardarOrden() {
     const btnGuardarOrden =
       document.querySelector('button[onclick*="agregarOrden"]') ||
@@ -691,11 +738,8 @@ export function initGuardia({ sb, subtabs } = {}) {
 
     bindAccionesEstado();
     bindReglaCartuchosLive();
-
-    // refresco automático al guardar una orden
     bindRefrescoPorGuardarOrden();
 
-    // Re-render UI cuando cambia inventario
     subscribeInventario(() => {
       renderGuardiaDesdeInventario();
       renderGuardiaPreview();
