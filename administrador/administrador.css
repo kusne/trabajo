@@ -486,7 +486,9 @@ textarea{
   --soft-gray-tx: rgba(15,23,42,.92);
 
   --soft-shadow: 0 10px 22px rgba(0,0,0,.08);
- 
+ /* ✅ Verde suave para “no seleccionado” */
+  --soft-green-bg: rgba(34,197,94,.12);
+  --soft-green-bd: rgba(34,197,94,.26);
 }
 
 /* Micro-animaciones (solo Guardia) */
@@ -563,8 +565,9 @@ textarea{
 
 /* Chips base */
 #tab-guardia .chip{
-  border: 1px solid rgba(94, 80, 63, .20);
-  background: rgba(255,255,255,.72);
+  background: var(--soft-green-bg);
+  border-color: var(--soft-green-bd);
+  color: var(--soft-black-tx);
 }
 
 #tab-guardia .chip:hover{
@@ -584,12 +587,12 @@ textarea{
   accent-color: rgba(59,130,246,.85);
 }
 
-/* Row-inline (móviles) */
+/* Row-inline (móviles destildado) */
 #tab-guardia .row-inline{
-  border: 1px solid rgba(94, 80, 63, .18);
-  background: rgba(255,255,255,.72);
+  background: var(--soft-green-bg);
+  border-color: var(--soft-green-bd);
 }
-
+/* Row-inline has (móviles tildados) */
 #tab-guardia .row-inline:has(input[type="checkbox"]:checked){
   background: var(--soft-red-bg);
   border-color: var(--soft-red-bd);
@@ -637,6 +640,7 @@ textarea{
   border-color: rgba(94, 80, 63, .38);
   box-shadow: 0 0 0 4px rgba(94, 80, 63, .14);
 }
+
 
 
 
