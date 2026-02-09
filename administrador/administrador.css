@@ -458,19 +458,25 @@ textarea{
    ====================================================== */
 
 :root{
-  /* ✅ NUEVAS: rojo suave (selección) */
+  /* ✅ FIX: soft-blue existía “referenciado” pero no definido */
+  --soft-blue-bg: rgba(59,130,246,.14);
+  --soft-blue-bd: rgba(59,130,246,.30);
+  --soft-blue-tx: rgba(30,64,175,.92);
+
+  /* rojo suave (selección) */
   --soft-red-bg: rgba(220,38,38,.14);
   --soft-red-bd: rgba(220,38,38,.32);
 
-  /* ✅ texto “negro” suave (no azul) */
+  /* texto “negro” suave */
   --soft-black-tx: rgba(15,23,42,.92);
 
   --soft-cyan-bg: rgba(14,165,233,.14);
   --soft-cyan-bd: rgba(14,165,233,.30);
   --soft-cyan-tx: rgba(8,145,178,.95);
 
-  --soft-green-bg: rgba(34,197,94,.14);
-  --soft-green-bd: rgba(34,197,94,.30);
+  /* verde suave (NO seleccionado) */
+  --soft-green-bg: rgba(34,197,94,.12);
+  --soft-green-bd: rgba(34,197,94,.26);
   --soft-green-tx: rgba(22,101,52,.95);
 
   --soft-orange-bg: rgba(249,115,22,.14);
@@ -486,9 +492,6 @@ textarea{
   --soft-gray-tx: rgba(15,23,42,.92);
 
   --soft-shadow: 0 10px 22px rgba(0,0,0,.08);
- /* ✅ Verde suave para “no seleccionado” */
-  --soft-green-bg: rgba(34,197,94,.12);
-  --soft-green-bd: rgba(34,197,94,.26);
 }
 
 /* Micro-animaciones (solo Guardia) */
@@ -563,10 +566,10 @@ textarea{
   color: var(--soft-gray-tx);
 }
 
-/* Chips base */
+/* Chips base (destildado = verde) */
 #tab-guardia .chip{
   background: var(--soft-green-bg);
-  border-color: var(--soft-green-bd);
+  border: 1px solid var(--soft-green-bd);
   color: var(--soft-black-tx);
 }
 
@@ -575,24 +578,28 @@ textarea{
   box-shadow: 0 10px 18px rgba(0,0,0,.07);
 }
 
-/* Chip seleccionado */
+/* Chip seleccionado (tildado = rojo) */
 #tab-guardia .chip:has(input[type="checkbox"]:checked){
   background: var(--soft-red-bg);
   border-color: var(--soft-red-bd);
   color: var(--soft-black-tx);
 }
 
-/* Checkbox */
-#tab-guardia .chip input[type="checkbox"]{
-  accent-color: rgba(59,130,246,.85);
+/* ✅ checkbox verde/rojo (no azul) */
+#tab-guardia input[type="checkbox"]{
+  accent-color: rgba(34,197,94,.85);
+}
+#tab-guardia input[type="checkbox"]:checked{
+  accent-color: rgba(220,38,38,.88);
 }
 
-/* Row-inline (móviles destildado) */
+/* Row-inline (móviles destildado = verde) */
 #tab-guardia .row-inline{
   background: var(--soft-green-bg);
-  border-color: var(--soft-green-bd);
+  border: 1px solid var(--soft-green-bd);
 }
-/* Row-inline has (móviles tildados) */
+
+/* Row-inline (móviles tildado = rojo) */
 #tab-guardia .row-inline:has(input[type="checkbox"]:checked){
   background: var(--soft-red-bg);
   border-color: var(--soft-red-bd);
@@ -600,11 +607,9 @@ textarea{
 
 /* ======================================================
    ✅ PANEL ARENA (INTERMEDIO/FUERTE) - MISMO COLOR EN TODAS LAS SECCIONES
-   Envuelve: título + contenido + chips + inputs
    ====================================================== */
 
 #tab-guardia .g-section{
-  /* Arena intermedio/fuerte (ajustable) */
   background: rgba(214, 200, 182, .96);
   border: 1px solid rgba(94, 80, 63, .24);
   border-radius: 16px;
@@ -612,19 +617,16 @@ textarea{
   box-shadow: 0 10px 22px rgba(0,0,0,.06);
 }
 
-/* El título queda del mismo color que el panel */
 #tab-guardia .g-section-title{
   background: transparent;
   border-bottom: 1px solid rgba(94, 80, 63, .16);
   color: rgba(30, 20, 10, .92);
 }
 
-/* Body transparente (misma arena en todo) */
 #tab-guardia .g-section-body{
   background: transparent;
 }
 
-/* Inputs flotantes sobre arena (no azul) */
 #tab-guardia select,
 #tab-guardia textarea,
 #tab-guardia input[type="text"]{
@@ -640,19 +642,52 @@ textarea{
   border-color: rgba(94, 80, 63, .38);
   box-shadow: 0 0 0 4px rgba(94, 80, 63, .14);
 }
-/* Moviles: label a la izquierda + flags prolijos */
+
+/* ======================================================
+   ✅ MOVILES: layout definitivo (número a la izquierda de Libro/TVF)
+   Reemplaza los 3 intentos anteriores
+   ====================================================== */
+
+#tab-guardia .row-inline{
+  display:flex !important;
+  align-items:center !important;
+  gap: 12px !important;
+  flex-wrap: nowrap !important;
+  justify-content: flex-start !important;
+}
+
+/* pisa label global SOLO dentro de row-inline */
+#tab-guardia .row-inline label{
+  display:inline-flex !important;
+  margin: 0 !important;
+}
+
+/* número/nombre del móvil pegado al checkbox */
 #tab-guardia .row-inline .movil-name{
-  flex: 1;
-  margin: 0;          /* evita spacing raro del <label> global */
-  font-weight: 700;
+  display:inline-flex !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-weight: 800 !important;
+  flex: 0 0 auto !important;
+  min-width: 70px !important;
+  white-space: nowrap !important;
 }
 
+/* flags a la derecha del número */
 #tab-guardia .row-inline .mov-flags{
-  display:flex;
-  gap:10px;
-  align-items:center;
+  display:flex !important;
+  gap: 14px !important;
+  align-items:center !important;
+  flex: 0 0 auto !important;
 }
 
+/* obs al extremo derecho */
+#tab-guardia .row-inline .mini{
+  margin-left: auto !important;
+  flex: 0 0 220px !important;
+}
+
+/* flags mini estética */
 #tab-guardia .row-inline .mov-flag{
   display:inline-flex;
   gap:6px;
@@ -666,74 +701,6 @@ textarea{
   width:auto;
   margin:0;
 }
-/* ✅ En filas de móviles: el nombre/número del móvil SIEMPRE a la izquierda */
-#tab-guardia .row-inline{
-  display: flex;               /* por si alguna regla lo pisa */
-  align-items: center;
-  gap: 10px;
-}
-
-/* pisa el label global (display:block + márgenes) */
-#tab-guardia .row-inline label,
-#tab-guardia .row-inline .movil-name{
-  display: inline-flex;
-  margin: 0 !important;        /* mata el margin-top/bottom global */
-  padding: 0;
-  font-weight: 700;
-  flex: 1;                     /* empuja flags/obs hacia la derecha */
-  justify-content: flex-start;
-  white-space: nowrap;
-}
-
-/* tildes a la derecha */
-#tab-guardia .row-inline .mov-flags{
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex: 0 0 auto;
-}
-
-/* obs a la derecha (ya la tenés como .mini) */
-#tab-guardia .row-inline .mini{
-  flex: 0 0 220px;
-}
-/* =========================
-   FIX layout MOVILES (Guardia)
-   Numero a la izquierda de Libro/TVF
-   ========================= */
-
-#tab-guardia .row-inline{
-  justify-content: flex-start !important;
-  flex-wrap: nowrap !important;
-}
-
-/* el número/nombre del móvil: queda pegado al checkbox, NO centrado */
-#tab-guardia .row-inline .movil-name{
-  display: inline-flex !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  font-weight: 700;
-  flex: 0 0 auto !important;      /* NO “flex:1” */
-  min-width: 70px;               /* para que no se achique */
-  white-space: nowrap;
-}
-
-/* flags (Libro/TVF) quedan a la derecha del número */
-#tab-guardia .row-inline .mov-flags{
-  flex: 0 0 auto !important;
-}
-
-/* Obs se va a la derecha del todo (empuja lo anterior a la izquierda) */
-#tab-guardia .row-inline .mini{
-  margin-left: auto !important;
-}
-
-
-
-
-
-
-
 
 
 
