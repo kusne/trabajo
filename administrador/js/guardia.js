@@ -14,7 +14,7 @@ const SUBGRUPO_CANON = [
   { key: "alcoholimetros", label: "Alcoholimetros" },
   { key: "pdas", label: "PDAs" },
   { key: "impresoras", label: "Impresoras" },
-  { key: "ht", label: "Ht" },
+  { key: "ht", label: "HT" },
   { key: "escopetas", label: "Escopetas" },
   { key: "cartuchos", label: "Cartuchos" },
 ];
@@ -510,6 +510,13 @@ export function initGuardia({ sb, subtabs } = {}) {
     const pers = invActivos("personal");
     const movs = invActivos("movil");
     const elems = invActivos("elemento");
+    // ✅ Cartuchos se manejan en su sección propia (con cantidad). Los quitamos del listado de "Elementos"
+    //    para evitar que aparezcan duplicados en la UI.
+    const elemsUI = elems.filter((it) => {
+      const sub = getSubgrupoLabel(it?.meta || {});
+      const lbl = String(it?.label || "").toLowerCase();
+      return String(sub).toLowerCase() !== "cartuchos" && !lbl.includes("cartucho");
+    });
 
     const p1 = guardiaState?.patrullas?.p1 || {};
     const p2 = guardiaState?.patrullas?.p2 || {};
@@ -520,10 +527,20 @@ export function initGuardia({ sb, subtabs } = {}) {
     renderMoviles(p1Moviles, movs, p1.moviles || []);
     renderMoviles(p2Moviles, movs, p2.moviles || []);
 
-    const p1Elems = p1.elementos_ids || [];
-    const p2Elems = p2.elementos_ids || [];
+    const isCartuchoId = (id) => {
+      const lbl = invLabelFromValue("elemento", id).toLowerCase();
+      return lbl.includes("cartucho");
+    };
 
-    const groups1 = groupElementosBySubgrupo(elems.map((x) => x.value));
+    const p1ElemsRaw = p1.elementos_ids || [];
+    const p2ElemsRaw = p2.elementos_ids || [];
+
+    // ✅ por compatibilidad: si antes se guardaron cartuchos como "elementos", acá los ocultamos
+    const p1Elems = p1ElemsRaw.filter((id) => !isCartuchoId(id));
+    const p2Elems = p2ElemsRaw.filter((id) => !isCartuchoId(id));
+    
+
+    const groups1 = groupElementosBySubgrupo(elemsUI.map((x) => x.value));
     const groups2 = groups1;
 
     const renderElementosGrouped = (container, checked, groups) => {
@@ -539,7 +556,7 @@ export function initGuardia({ sb, subtabs } = {}) {
         row.className = "chip-grid";
 
         const items = vals.map((v) => {
-          const it = elems.find((x) => x.value === v);
+          const it = elemsUI.find((x) => x.value === v);
           return it || { label: v, value: v };
         });
         renderChips(row, items, checked);
@@ -612,7 +629,34 @@ export function initGuardia({ sb, subtabs } = {}) {
     return next;
   }
 
-  async function cargarGuardiaDesdeServidor() {
+  
+  // ======================================================
+  // ✅ Preview en vivo: si cambiás Lugar/Obs/Selecciones,
+  // el JSON se refresca sin necesidad de guardar.
+  // (no escribe en servidor)
+  // ======================================================
+  function renderPreviewFromUI() {
+    try {
+      const next = buildStateFromUI();
+      // NO tocamos guardiaState persistido; solo preview visual
+      const pre = elPreview();
+      if (pre) pre.textContent = JSON.stringify(next || {}, null, 2);
+    } catch {}
+  }
+
+  function bindLivePreview() {
+    // selects + obs
+    [p1Lugar, p2Lugar].forEach((el) => el && el.addEventListener("change", renderPreviewFromUI));
+    [p1Obs, p2Obs].forEach((el) => el && el.addEventListener("input", renderPreviewFromUI));
+
+    // contenedores de checks (delegado)
+    [p1Personal, p2Personal, p1Moviles, p2Moviles, p1Elementos, p2Elementos, p1Cartuchos, p2Cartuchos].forEach((c) => {
+      if (!c) return;
+      c.addEventListener("change", renderPreviewFromUI);
+      c.addEventListener("input", renderPreviewFromUI);
+    });
+  }
+async function cargarGuardiaDesdeServidor() {
     const session = await getSessionOrNull(sb);
     if (!session) return null;
 
@@ -784,6 +828,8 @@ export function initGuardia({ sb, subtabs } = {}) {
     bindAccionesEstado();
     bindReglaCartuchosLive();
     bindRefrescoPorGuardarOrden();
+
+    bindLivePreview();
 
     subscribeInventario(() => {
       renderGuardiaDesdeInventario();
