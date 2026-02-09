@@ -458,5 +458,119 @@ textarea{
 .row-inline .mini{
   width: 220px;
 }
+/* =========================
+   PALETA SUAVE - Botones Guardia
+   (no rompe btn-primary/ghost existentes)
+   ========================= */
+
+:root{
+  --g-blue-bg: rgba(59, 130, 246, .14);
+  --g-blue-bd: rgba(59, 130, 246, .30);
+  --g-blue-tx: rgba(30, 64, 175, .95);
+
+  --g-cyan-bg: rgba(14, 165, 233, .14);
+  --g-cyan-bd: rgba(14, 165, 233, .30);
+  --g-cyan-tx: rgba(8, 145, 178, .95);
+
+  --g-orange-bg: rgba(249, 115, 22, .14);
+  --g-orange-bd: rgba(249, 115, 22, .30);
+  --g-orange-tx: rgba(154, 52, 18, .95);
+
+  --g-green-bg: rgba(34, 197, 94, .14);
+  --g-green-bd: rgba(34, 197, 94, .30);
+  --g-green-tx: rgba(22, 101, 52, .95);
+
+  --g-purple-bg: rgba(168, 85, 247, .14);
+  --g-purple-bd: rgba(168, 85, 247, .30);
+  --g-purple-tx: rgba(88, 28, 135, .95);
+
+  --g-gray-bg: rgba(100, 116, 139, .14);
+  --g-gray-bd: rgba(100, 116, 139, .28);
+  --g-gray-tx: rgba(15, 23, 42, .92);
+}
+
+/* animación suave */
+.guardia-wrap button{
+  transition: transform .12s ease, box-shadow .12s ease, background-color .12s ease, border-color .12s ease;
+}
+.guardia-wrap button:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(0,0,0,.08);
+}
+.guardia-wrap button:active{
+  transform: translateY(0px);
+  box-shadow: 0 6px 14px rgba(0,0,0,.06);
+}
+
+/* SUBTABS: Patrulla 1 / Patrulla 2 */
+.guardia-subtabs .subtab-btn{
+  background: rgba(255,255,255,.75);
+}
+.guardia-subtabs .subtab-btn.is-active{
+  background: var(--g-blue-bg);
+  border-color: var(--g-blue-bd);
+  color: var(--g-blue-tx);
+}
+
+/* HEADER: Actualizar (celeste suave) */
+#btnGuardiaActualizar{
+  background: var(--g-cyan-bg);
+  border-color: var(--g-cyan-bd);
+  color: var(--g-cyan-tx);
+}
+
+/* HEADER: Guardar Guardia (azul suave, sobreescribe btn-primary oscuro) */
+#btnGuardiaGuardar{
+  background: var(--g-blue-bg) !important;
+  border: 1px solid var(--g-blue-bd) !important;
+  color: var(--g-blue-tx) !important;
+}
+#btnGuardiaGuardar:hover{
+  background: rgba(59, 130, 246, .18) !important;
+}
+
+/* Acciones Patrulla: estilos por data-accion */
+.patrulla-actions button[data-accion="Ingreso"]{
+  background: var(--g-blue-bg) !important;
+  border: 1px solid var(--g-blue-bd) !important;
+  color: var(--g-blue-tx) !important;
+}
+.patrulla-actions button[data-accion="Retiro"]{
+  background: var(--g-orange-bg);
+  border: 1px solid var(--g-orange-bd);
+  color: var(--g-orange-tx);
+}
+.patrulla-actions button[data-accion="Presente"]{
+  background: var(--g-green-bg);
+  border: 1px solid var(--g-green-bd);
+  color: var(--g-green-tx);
+}
+.patrulla-actions button[data-accion="Franco"]{
+  background: var(--g-purple-bg);
+  border: 1px solid var(--g-purple-bd);
+  color: var(--g-purple-tx);
+}
+.patrulla-actions button[data-accion="Constancia"]{
+  background: var(--g-gray-bg);
+  border: 1px solid var(--g-gray-bd);
+  color: var(--g-gray-tx);
+}
+
+/* Para que btn-ghost dentro de patrulla-actions se vea "chip" suave */
+.patrulla-actions .btn-ghost{
+  border-radius: 999px;
+}
+
+/* (opcional) Estado “pill” un poco más “premium” */
+.guardia-state{
+  background: rgba(15, 23, 42, .04) !important;
+  border-color: rgba(15, 23, 42, .10) !important;
+}
+
+/* (opcional) resaltar título de sección */
+.g-section-title{
+  background: rgba(59, 130, 246, .06) !important;
+}
+
 
 
