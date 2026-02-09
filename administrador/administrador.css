@@ -666,6 +666,38 @@ textarea{
   width:auto;
   margin:0;
 }
+/* ✅ En filas de móviles: el nombre/número del móvil SIEMPRE a la izquierda */
+#tab-guardia .row-inline{
+  display: flex;               /* por si alguna regla lo pisa */
+  align-items: center;
+  gap: 10px;
+}
+
+/* pisa el label global (display:block + márgenes) */
+#tab-guardia .row-inline label,
+#tab-guardia .row-inline .movil-name{
+  display: inline-flex;
+  margin: 0 !important;        /* mata el margin-top/bottom global */
+  padding: 0;
+  font-weight: 700;
+  flex: 1;                     /* empuja flags/obs hacia la derecha */
+  justify-content: flex-start;
+  white-space: nowrap;
+}
+
+/* tildes a la derecha */
+#tab-guardia .row-inline .mov-flags{
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+/* obs a la derecha (ya la tenés como .mini) */
+#tab-guardia .row-inline .mini{
+  flex: 0 0 220px;
+}
+
 
 
 
