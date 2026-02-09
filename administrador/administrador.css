@@ -591,8 +591,8 @@ textarea{
 }
 
 #tab-guardia .row-inline:has(input[type="checkbox"]:checked){
-  background: var(--soft-blue-bg);
-  border-color: var(--soft-blue-bd);
+  background: var(--soft-red-bg);
+  border-color: var(--soft-red-bd);
 }
 
 /* ======================================================
@@ -637,6 +637,7 @@ textarea{
   border-color: rgba(94, 80, 63, .38);
   box-shadow: 0 0 0 4px rgba(94, 80, 63, .14);
 }
+
 
 
 
