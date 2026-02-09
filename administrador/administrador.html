@@ -243,7 +243,118 @@
       </section>
 
 
-    <!-- shared scripts (orden correcto) -->
+    
+      <!-- TAB: INVENTARIO -->
+      <section id="tab-inventario" class="tab-panel">
+        <h2>Inventario</h2>
+
+        <div class="card" style="padding:14px; margin-bottom:12px;">
+          <div class="row">
+            <div style="flex:1; min-width:220px;">
+              <label for="invTipo">Tipo</label>
+              <select id="invTipo">
+                <option value="personal">Personal</option>
+                <option value="movil">Móvil</option>
+                <option value="elemento">Elemento</option>
+              </select>
+            </div>
+
+            <div style="flex:1; min-width:220px;">
+              <label for="invLabel">Etiqueta</label>
+              <input id="invLabel" type="text" placeholder="Ej: Subof. Pérez" />
+            </div>
+
+            <div style="flex:1; min-width:220px;">
+              <label for="invValue">Valor (ID)</label>
+              <input id="invValue" type="text" placeholder="Ej: perez_subof" />
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:10px;">
+            <div style="flex:1; min-width:180px;">
+              <label for="invOrden">Orden</label>
+              <input id="invOrden" type="number" placeholder="Ej: 10" />
+            </div>
+
+            <div style="flex:1; min-width:220px;">
+              <label for="invSubgrupo">Subgrupo (solo Elementos)</label>
+              <input id="invSubgrupo" type="text" placeholder="Ej: Impresoras / PDAs / Escopetas" />
+            </div>
+
+            <div style="flex:2; min-width:260px;">
+              <label for="invMetaExtra">Meta extra (JSON opcional)</label>
+              <input id="invMetaExtra" type="text" placeholder='Ej: {"subgrupo":"pdas"}' />
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:12px; justify-content:flex-end;">
+            <button type="button" id="btnInvRefrescar" class="btn-ghost">Refrescar</button>
+            <button type="button" id="btnInvAgregar" class="btn-primary">Agregar / Actualizar</button>
+          </div>
+
+          <div id="invEstado" class="muted" style="margin-top:10px;">—</div>
+        </div>
+
+        <div id="invLista"></div>
+      </section>
+
+
+      <!-- TAB: LIBRO MEMORÁNDUM -->
+      <section id="tab-libro" class="tab-panel">
+        <h2>Libro Memorándum</h2>
+
+        <div class="card" style="padding:14px; margin-bottom:12px;">
+          <div class="row">
+            <div style="flex:1; min-width:220px;">
+              <label for="memoCausa">Causa</label>
+              <select id="memoCausa">
+                <option value="">Seleccionar</option>
+                <option value="Ingreso">Ingreso</option>
+                <option value="Retiro">Retiro</option>
+                <option value="Presente">Presente</option>
+                <option value="Franco">Franco</option>
+                <option value="Constancia">Constancia</option>
+                <option value="Novedad">Novedad</option>
+              </select>
+            </div>
+
+            <div style="width:180px; min-width:180px;">
+              <label for="memoHora">Hora</label>
+              <input id="memoHora" type="time" />
+            </div>
+          </div>
+
+          <label for="memoNovedad" style="margin-top:10px;">Novedad</label>
+          <textarea id="memoNovedad" rows="3" placeholder="Escribí la novedad..."></textarea>
+
+          <div class="row" style="margin-top:12px; justify-content:flex-end;">
+            <button type="button" id="btnLibroLimpiar" class="btn-ghost">Limpiar</button>
+            <button type="button" id="btnLibroAgregar" class="btn-primary">Agregar</button>
+          </div>
+        </div>
+
+        <div class="card" style="padding:14px; margin-bottom:12px;">
+          <div style="overflow:auto;">
+            <table style="width:100%; border-collapse:collapse;">
+              <thead>
+                <tr>
+                  <th style="text-align:left; padding:8px; border-bottom:1px solid rgba(0,0,0,.10);">Causa</th>
+                  <th style="text-align:left; padding:8px; border-bottom:1px solid rgba(0,0,0,.10); width:120px;">Hora</th>
+                  <th style="text-align:left; padding:8px; border-bottom:1px solid rgba(0,0,0,.10);">Novedad</th>
+                </tr>
+              </thead>
+              <tbody id="memoTbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="padding:14px;">
+          <div class="muted" style="margin-bottom:8px;">Salida JSON (preview)</div>
+          <pre id="libroJsonPreview" class="json-preview">{}</pre>
+        </div>
+      </section>
+
+<!-- shared scripts (orden correcto) -->
     <script src="../funciones/js/storage.js"></script>
     <script src="../funciones/js/dom.js"></script>
     <script src="../funciones/js/uiValidacion.js"></script>
@@ -261,6 +372,7 @@
   </div>
 </body>
 </html>
+
 
 
 
