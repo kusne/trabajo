@@ -738,12 +738,3 @@ textarea{
   cursor: not-allowed !important;
   opacity: .85 !important;
 }
-
-/* Si querés que se note "ocupado por otra patrulla" sin cambiar el rojo: */
-#tab-guardia .chip.is-locked::after{
-  content:"ocupado";
-  font-size: 10px;
-  font-weight: 700;
-  margin-left: 6px;
-  opacity: .70;
-}
