@@ -686,6 +686,49 @@ textarea{
   border-color: rgba(59,130,246,.35);
   box-shadow: 0 0 0 4px rgba(59,130,246,.12);
 }
+/* ======================================================
+   GUARDIA - Fondo único neutro (no azul/celeste)
+   para TODOS los bloques (g-section)
+   ====================================================== */
+
+#tab-guardia .g-section{
+  /* tono arena muy suave */
+  background: rgba(245, 240, 232, .92);
+  border: 1px solid rgba(120, 113, 108, .18); /* borde “piedra” */
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 8px 18px rgba(0,0,0,.05);
+}
+
+#tab-guardia .g-section-title{
+  /* un poco más oscuro para separar sin cansar */
+  background: rgba(235, 228, 218, .85);
+  border-bottom: 1px solid rgba(120, 113, 108, .16);
+}
+
+#tab-guardia .g-section-body{
+  /* velo interno para que chips/inputs contrasten */
+  background: rgba(255,255,255,.18);
+}
+
+/* inputs dentro de Guardia: “flotantes” */
+#tab-guardia select,
+#tab-guardia textarea,
+#tab-guardia input[type="text"]{
+  background: rgba(255,255,255,.86);
+  border: 1px solid rgba(120, 113, 108, .20);
+  border-radius: 12px;
+}
+
+#tab-guardia select:focus,
+#tab-guardia textarea:focus,
+#tab-guardia input[type="text"]:focus{
+  outline: none;
+  border-color: rgba(120, 113, 108, .35);
+  box-shadow: 0 0 0 4px rgba(120, 113, 108, .14);
+}
+
+
 
 
 
