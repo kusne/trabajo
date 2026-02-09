@@ -14,9 +14,9 @@ const SUBGRUPO_CANON = [
   { key: "alcoholimetros", label: "Alcoholimetros" },
   { key: "pdas", label: "PDAs" },
   { key: "impresoras", label: "Impresoras" },
+  { key: "ht", label: "Ht" },
   { key: "escopetas", label: "Escopetas" },
   { key: "cartuchos", label: "Cartuchos" },
-  { key: "ht", label: "Ht" },
 ];
 
 const SUBGRUPO_KEY_TO_LABEL = new Map(SUBGRUPO_CANON.map((x) => [x.key, x.label]));
@@ -279,47 +279,56 @@ function aplicarReglaCartuchos(elementosContainer, cartuchosContainer, precomput
   }
 }
 
-function renderCartuchos(container, qtyMap = {}) {
+function renderCartuchos(container, checkedMap = {}, qtyMap = {}) {
   if (!container) return;
   container.innerHTML = "";
 
-  // Dos tipos solicitados:
-  // - AT cal 12/70
-  // - PG cal 12/70
+  // Cartuchos cal. 12/70 (solo visibles si hay Escopeta)
   const tipos = [
-    { key: "at_1270", label: "AT cal 12/70" },
-    { key: "pg_1270", label: "PG cal 12/70" },
+    { key: "at_12_70", label: "AT cal 12/70" },
+    { key: "pg_12_70", label: "PG cal 12/70" },
   ];
 
-  const wrapBox = document.createElement("div");
-  wrapBox.className = "cartuchos-box";
-
   tipos.forEach((t) => {
-    const row = document.createElement("div");
-    row.className = "cartuchos-row";
+    const id = `cart_${t.key}_${Math.random().toString(16).slice(2)}`;
 
-    const lab = document.createElement("label");
-    lab.className = "cartuchos-label";
-    lab.textContent = t.label;
+    const wrap = document.createElement("div");
+    wrap.className = "cart-row"; // (css opcional)
 
-    const inp = document.createElement("input");
-    inp.type = "number";
-    inp.min = "0";
-    inp.step = "1";
-    inp.inputMode = "numeric";
-    inp.placeholder = "Cantidad";
-    inp.className = "cartuchos-num";
-    inp.setAttribute("data-key", t.key);
+    const chip = document.createElement("label");
+    chip.className = "chip";
 
-    const v = qtyMap?.[t.key];
-    inp.value = (v === 0 || v) ? String(v) : "";
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.id = id;
+    chk.setAttribute("data-key", t.key);
+    chk.checked = Boolean(checkedMap?.[t.key]);
 
-    row.appendChild(lab);
-    row.appendChild(inp);
-    wrapBox.appendChild(row);
+    const span = document.createElement("span");
+    span.textContent = t.label;
+
+    chip.appendChild(chk);
+    chip.appendChild(span);
+
+    const qty = document.createElement("input");
+    qty.type = "number";
+    qty.min = "0";
+    qty.step = "1";
+    qty.placeholder = "Cant.";
+    qty.className = "cart-qty";
+    qty.setAttribute("data-key", t.key);
+    qty.value = String(qtyMap?.[t.key] ?? 0);
+    qty.disabled = !chk.checked;
+
+    chk.addEventListener("change", () => {
+      qty.disabled = !chk.checked;
+      if (!chk.checked) qty.value = "0";
+    });
+
+    wrap.appendChild(chip);
+    wrap.appendChild(qty);
+    container.appendChild(wrap);
   });
-
-  container.appendChild(wrapBox);
 }
 
 function readCartuchos(container) {
@@ -573,8 +582,8 @@ export function initGuardia({ sb, subtabs } = {}) {
     aplicarReglaCartuchos(p1Elementos, p1Cartuchos, p1Elem);
     aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2Elem);
 
-    const p1CartMap = readCartuchos(p1Cartuchos);
-    const p2CartMap = readCartuchos(p2Cartuchos);
+    const p1Cart = readCartuchos(p1Cartuchos);
+    const p2Cart = readCartuchos(p2Cartuchos);
 
     const next = cloneDeep(guardiaState || {});
     next.version = 1;
@@ -589,14 +598,16 @@ export function initGuardia({ sb, subtabs } = {}) {
     next.patrullas.p1.personal_ids = p1PersonalIds;
     next.patrullas.p1.moviles = p1Mov;
     next.patrullas.p1.elementos_ids = p1Elem;
-    next.patrullas.p1.cartuchos_map = p1CartMap;
+    next.patrullas.p1.cartuchos_map = p1Cart.cartuchos_map || {};
+    next.patrullas.p1.cartuchos_qty_map = p1Cart.cartuchos_qty_map || {};
 
     next.patrullas.p2.lugar = normalizarLugar(p2Lugar?.value || "");
     next.patrullas.p2.obs = (p2Obs?.value || "").trim();
     next.patrullas.p2.personal_ids = p2PersonalIds;
     next.patrullas.p2.moviles = p2Mov;
     next.patrullas.p2.elementos_ids = p2Elem;
-    next.patrullas.p2.cartuchos_map = p2CartMap;
+    next.patrullas.p2.cartuchos_map = p2Cart.cartuchos_map || {};
+    next.patrullas.p2.cartuchos_qty_map = p2Cart.cartuchos_qty_map || {};
 
     return next;
   }
@@ -702,6 +713,7 @@ export function initGuardia({ sb, subtabs } = {}) {
             moviles: Array.isArray(pat.moviles) ? cloneDeep(pat.moviles) : [],
             elementos_ids: Array.isArray(pat.elementos_ids) ? [...pat.elementos_ids] : [],
             cartuchos_map: pat.cartuchos_map ? cloneDeep(pat.cartuchos_map) : {},
+            cartuchos_qty_map: pat.cartuchos_qty_map ? cloneDeep(pat.cartuchos_qty_map) : {},
           },
         });
 
