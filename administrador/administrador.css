@@ -483,6 +483,17 @@ textarea{
   --soft-gray-tx: rgba(15,23,42,.92);
 
   --soft-shadow: 0 10px 22px rgba(0,0,0,.08);
+  :root{
+  /* ...tus variables actuales... */
+
+  /* ✅ NUEVAS: rojo suave (selección) */
+  --soft-red-bg: rgba(220,38,38,.14);
+  --soft-red-bd: rgba(220,38,38,.32);
+
+  /* ✅ texto “negro” suave (no azul) */
+  --soft-black-tx: rgba(15,23,42,.92);
+}
+
 }
 
 /* Micro-animaciones (solo Guardia) */
@@ -570,9 +581,9 @@ textarea{
 
 /* Chip seleccionado */
 #tab-guardia .chip:has(input[type="checkbox"]:checked){
-  background: var(--soft-blue-bg);
-  border-color: var(--soft-blue-bd);
-  color: var(--soft-blue-tx);
+  background: var(--soft-red-bg);
+  border-color: var(--soft-red-bd);
+  color: var(--soft-black-tx);
 }
 
 /* Checkbox */
@@ -633,6 +644,7 @@ textarea{
   border-color: rgba(94, 80, 63, .38);
   box-shadow: 0 0 0 4px rgba(94, 80, 63, .14);
 }
+
 
 
 
