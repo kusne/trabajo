@@ -14,13 +14,32 @@ const SUBGRUPO_CANON = [
   { key: "alcoholimetros", label: "Alcoholimetros" },
   { key: "pdas", label: "PDAs" },
   { key: "impresoras", label: "Impresoras" },
-  { key: "ht", label: "Ht" },
+  { key: "ht", label: "HT" },
   { key: "escopetas", label: "Escopetas" },
   { key: "cartuchos", label: "Cartuchos" },
 ];
 
 const SUBGRUPO_KEY_TO_LABEL = new Map(SUBGRUPO_CANON.map((x) => [x.key, x.label]));
 const SUBGRUPOS_ORDEN = SUBGRUPO_CANON.map((x) => x.label);
+
+// ======================================================
+// ESCOPETAS FIJAS (SIEMPRE 2 OPCIONES EN UI)
+// ======================================================
+const ESCOPETAS_FIXED = [
+  { nro: "650368", label: "Escopeta N°650368", value: "escopeta_650368", meta: { subgrupo: "escopetas" } },
+  { nro: "650367", label: "Escopeta N°650367", value: "escopeta_650367", meta: { subgrupo: "escopetas" } },
+];
+
+function ensureFixedEscopetas(items = []) {
+  const out = Array.isArray(items) ? [...items] : [];
+  const hasNro = (nro) =>
+    out.some((it) => String(it?.label || "").includes(nro) || String(it?.value || "") === `escopeta_${nro}`);
+  ESCOPETAS_FIXED.forEach((e) => {
+    if (!hasNro(e.nro)) out.push({ ...e });
+  });
+  return out;
+}
+
 
 function normalizeKey(s) {
   return String(s || "")
@@ -69,7 +88,7 @@ function groupElementosBySubgrupo(elementoValues = []) {
 function readCheckedValues(container) {
   if (!container) return [];
   return Array.from(container.querySelectorAll("input[type=checkbox][data-value]"))
-    .filter((x) => x.checked)
+    .filter((x) => x.checked && x.getAttribute("data-locked") !== "1")
     .map((x) => x.getAttribute("data-value"))
     .filter(Boolean);
 }
@@ -264,6 +283,7 @@ function readMoviles(container) {
 function aplicarReglaCartuchos(elementosContainer, cartuchosContainer, precomputedElementosIds = null) {
   if (!elementosContainer || !cartuchosContainer) return;
 
+  // Si hay escopetas seleccionadas => habilitar cartuchos
   const elementosIds = precomputedElementosIds || readCheckedValues(elementosContainer);
   const hayEscopeta = elementosIds.some((id) => {
     const label = invLabelFromValue("elemento", id).toLowerCase();
@@ -271,8 +291,10 @@ function aplicarReglaCartuchos(elementosContainer, cartuchosContainer, precomput
   });
 
   cartuchosContainer.style.display = hayEscopeta ? "block" : "none";
+
+  // Si no hay escopeta: limpiar cantidades
   if (!hayEscopeta) {
-    cartuchosContainer.querySelectorAll("input[type=checkbox]").forEach((c) => (c.checked = false));
+    cartuchosContainer.querySelectorAll('input[type="number"][data-key]').forEach((n) => (n.value = ""));
   }
 }
 
@@ -286,20 +308,11 @@ function renderCartuchos(container, checkedMap = {}, qtyMap = {}) {
     { key: "pg_12_70", label: "PG cal 12/70" },
   ];
 
-  // Compat: si antes guardaste SOLO cantidades en cartuchos_qty (map num),
-  // marcamos checked cuando qty > 0
-  const qtyLegacy = qtyMap && typeof qtyMap === "object" && !Array.isArray(qtyMap) ? qtyMap : {};
-  const checkedLegacy = {};
-  Object.keys(qtyLegacy).forEach((k) => {
-    const n = parseInt(qtyLegacy[k], 10);
-    if (!Number.isNaN(n) && n > 0) checkedLegacy[k] = true;
-  });
-
   tipos.forEach((t) => {
     const id = `cart_${t.key}_${Math.random().toString(16).slice(2)}`;
 
     const wrap = document.createElement("div");
-    wrap.className = "cart-row";
+    wrap.className = "cart-row"; // (css opcional)
 
     const chip = document.createElement("label");
     chip.className = "chip";
@@ -308,7 +321,7 @@ function renderCartuchos(container, checkedMap = {}, qtyMap = {}) {
     chk.type = "checkbox";
     chk.id = id;
     chk.setAttribute("data-key", t.key);
-    chk.checked = Boolean(checkedMap?.[t.key] ?? checkedLegacy?.[t.key]);
+    chk.checked = Boolean(checkedMap?.[t.key]);
 
     const span = document.createElement("span");
     span.textContent = t.label;
@@ -323,11 +336,7 @@ function renderCartuchos(container, checkedMap = {}, qtyMap = {}) {
     qty.placeholder = "Cant.";
     qty.className = "cart-qty";
     qty.setAttribute("data-key", t.key);
-
-    const rawQty = qtyMap?.[t.key];
-    const qtyVal = Math.max(0, parseInt(rawQty, 10) || 0);
-    qty.value = String(qtyVal);
-
+    qty.value = String(qtyMap?.[t.key] ?? 0);
     qty.disabled = !chk.checked;
 
     chk.addEventListener("change", () => {
@@ -342,29 +351,19 @@ function renderCartuchos(container, checkedMap = {}, qtyMap = {}) {
 }
 
 function readCartuchos(container) {
-  if (!container) return { cartuchos_map: {}, cartuchos_qty_map: {} };
-
-  const cartuchos_map = {};
-  const cartuchos_qty_map = {};
-
-  const rows = Array.from(container.querySelectorAll(".cart-row"));
-  rows.forEach((row) => {
-    const chk = row.querySelector('input[type="checkbox"][data-key]');
-    const qty = row.querySelector('input[type="number"][data-key]');
-    const key = chk?.getAttribute("data-key") || qty?.getAttribute("data-key");
+  if (!container) return {};
+  const map = {};
+  Array.from(container.querySelectorAll('input[type="number"][data-key]')).forEach((n) => {
+    const key = n.getAttribute("data-key");
+    const raw = String(n.value || "").trim();
     if (!key) return;
 
-    const isOn = !!chk?.checked;
-    cartuchos_map[key] = isOn;
-
-    if (isOn) {
-      const raw = String(qty?.value ?? "").trim();
-      const num = Math.max(0, parseInt(raw, 10) || 0);
-      cartuchos_qty_map[key] = num;
-    }
+    // Guardamos número entero >= 0 (si vacío => no se guarda)
+    if (raw === "") return;
+    const num = Math.max(0, parseInt(raw, 10) || 0);
+    map[key] = num;
   });
-
-  return { cartuchos_map, cartuchos_qty_map };
+  return map;
 }
 
 function formatLogEntry(e) {
@@ -486,7 +485,6 @@ export function initGuardia({ sb, subtabs } = {}) {
 
   const btnGuardiaGuardar = document.getElementById("btnGuardiaGuardar");
   const btnGuardiaActualizar = document.getElementById("btnGuardiaActualizar");
-  const btnGuardiaActualizarDatos = document.getElementById("btnGuardiaActualizarDatos");
 
   const p1Lugar = document.getElementById("p1Lugar");
   const p1Obs = document.getElementById("p1Obs");
@@ -523,6 +521,63 @@ export function initGuardia({ sb, subtabs } = {}) {
     if (val) selectEl.value = val;
   }
 
+
+  // ======================================================
+  // BLOQUEO CRUZADO (SOLO ESCOPETAS)
+  // - lo seleccionado en Patrulla 1 NO se puede seleccionar en Patrulla 2 y viceversa
+  // ======================================================
+  let __elementosNoCartCache = [];
+
+  function __escopetaValuesFrom(list) {
+    const s = new Set();
+    (Array.isArray(list) ? list : []).forEach((it) => {
+      const lbl = String(it?.label || "").toLowerCase();
+      const sub = String(getSubgrupoLabel(it?.meta || {})).toLowerCase();
+      if (sub === "escopetas" || lbl.includes("escopeta")) {
+        if (lbl.includes("650368") || String(it?.value) === "escopeta_650368") s.add(String(it.value));
+        if (lbl.includes("650367") || String(it?.value) === "escopeta_650367") s.add(String(it.value));
+      }
+    });
+    // fallback por si no vienen del inventario
+    s.add("escopeta_650368");
+    s.add("escopeta_650367");
+    return s;
+  }
+
+  function __applyEscopetaLocks(container, mySel, otherSel, escSet) {
+    if (!container) return;
+    const inputs = Array.from(container.querySelectorAll('input[type="checkbox"][data-value]'));
+    inputs.forEach((chk) => {
+      const v = String(chk.getAttribute("data-value") || "");
+      if (!escSet.has(v)) return;
+
+      const chip = chk.closest(".chip");
+      const lock = otherSel.has(v) && !mySel.has(v);
+
+      if (lock) {
+        chk.checked = true;
+        chk.disabled = true;
+        chk.setAttribute("data-locked", "1");
+        chip?.classList.add("is-locked");
+      } else {
+        if (chk.getAttribute("data-locked") === "1") chk.checked = false;
+        chk.disabled = false;
+        chk.removeAttribute("data-locked");
+        chip?.classList.remove("is-locked");
+      }
+    });
+  }
+
+  function applyEscopetaCrossLock() {
+    const escSet = __escopetaValuesFrom(__elementosNoCartCache);
+
+    const p1Sel = new Set(readCheckedValues(p1Elementos).filter((v) => escSet.has(String(v))));
+    const p2Sel = new Set(readCheckedValues(p2Elementos).filter((v) => escSet.has(String(v))));
+
+    __applyEscopetaLocks(p1Elementos, p1Sel, p2Sel, escSet);
+    __applyEscopetaLocks(p2Elementos, p2Sel, p1Sel, escSet);
+  }
+
   function renderGuardiaDesdeInventario() {
     const lugares = getLugaresSmart();
     fillSelectOptions(p1Lugar, lugares, guardiaState?.patrullas?.p1?.lugar || "");
@@ -530,7 +585,14 @@ export function initGuardia({ sb, subtabs } = {}) {
 
     const pers = invActivos("personal");
     const movs = invActivos("movil");
-    const elems = invActivos("elemento");
+    const elems = ensureFixedEscopetas(invActivos("elemento"));
+    // ✅ Cartuchos se manejan en su sección propia (con cantidad). Los quitamos del listado de "Elementos"
+    //    para evitar que aparezcan duplicados en la UI.
+    const elemsUI = elems.filter((it) => {
+      const sub = getSubgrupoLabel(it?.meta || {});
+      const lbl = String(it?.label || "").toLowerCase();
+      return String(sub).toLowerCase() !== "cartuchos" && !lbl.includes("cartucho");
+    });
 
     const p1 = guardiaState?.patrullas?.p1 || {};
     const p2 = guardiaState?.patrullas?.p2 || {};
@@ -541,10 +603,20 @@ export function initGuardia({ sb, subtabs } = {}) {
     renderMoviles(p1Moviles, movs, p1.moviles || []);
     renderMoviles(p2Moviles, movs, p2.moviles || []);
 
-    const p1Elems = p1.elementos_ids || [];
-    const p2Elems = p2.elementos_ids || [];
+    const isCartuchoId = (id) => {
+      const lbl = invLabelFromValue("elemento", id).toLowerCase();
+      return lbl.includes("cartucho");
+    };
 
-    const groups1 = groupElementosBySubgrupo(elems.map((x) => x.value));
+    const p1ElemsRaw = p1.elementos_ids || [];
+    const p2ElemsRaw = p2.elementos_ids || [];
+
+    // ✅ por compatibilidad: si antes se guardaron cartuchos como "elementos", acá los ocultamos
+    const p1Elems = p1ElemsRaw.filter((id) => !isCartuchoId(id));
+    const p2Elems = p2ElemsRaw.filter((id) => !isCartuchoId(id));
+    
+
+    const groups1 = groupElementosBySubgrupo(elemsUI.map((x) => x.value));
     const groups2 = groups1;
 
     const renderElementosGrouped = (container, checked, groups) => {
@@ -560,7 +632,7 @@ export function initGuardia({ sb, subtabs } = {}) {
         row.className = "chip-grid";
 
         const items = vals.map((v) => {
-          const it = elems.find((x) => x.value === v);
+          const it = elemsUI.find((x) => x.value === v);
           return it || { label: v, value: v };
         });
         renderChips(row, items, checked);
@@ -571,8 +643,8 @@ export function initGuardia({ sb, subtabs } = {}) {
     renderElementosGrouped(p1Elementos, p1Elems, groups1);
     renderElementosGrouped(p2Elementos, p2Elems, groups2);
 
-    renderCartuchos(p1Cartuchos, p1.cartuchos_map || {});
-    renderCartuchos(p2Cartuchos, p2.cartuchos_map || {});
+    renderCartuchos(p1Cartuchos, p1.cartuchos_qty || p1.cartuchos_map || {});
+    renderCartuchos(p2Cartuchos, p2.cartuchos_qty || p2.cartuchos_map || {});
 
     aplicarReglaCartuchos(p1Elementos, p1Cartuchos, p1Elems);
     aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2Elems);
@@ -603,8 +675,8 @@ export function initGuardia({ sb, subtabs } = {}) {
     aplicarReglaCartuchos(p1Elementos, p1Cartuchos, p1Elem);
     aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2Elem);
 
-    const p1CartMap = readCartuchos(p1Cartuchos);
-    const p2CartMap = readCartuchos(p2Cartuchos);
+    const p1Cart = readCartuchos(p1Cartuchos);
+    const p2Cart = readCartuchos(p2Cartuchos);
 
     const next = cloneDeep(guardiaState || {});
     next.version = 1;
@@ -619,19 +691,48 @@ export function initGuardia({ sb, subtabs } = {}) {
     next.patrullas.p1.personal_ids = p1PersonalIds;
     next.patrullas.p1.moviles = p1Mov;
     next.patrullas.p1.elementos_ids = p1Elem;
-    next.patrullas.p1.cartuchos_map = p1CartMap;
+    next.patrullas.p1.cartuchos_map = p1Cart.cartuchos_map || {};
+    next.patrullas.p1.cartuchos_qty_map = p1Cart.cartuchos_qty_map || {};
 
     next.patrullas.p2.lugar = normalizarLugar(p2Lugar?.value || "");
     next.patrullas.p2.obs = (p2Obs?.value || "").trim();
     next.patrullas.p2.personal_ids = p2PersonalIds;
     next.patrullas.p2.moviles = p2Mov;
     next.patrullas.p2.elementos_ids = p2Elem;
-    next.patrullas.p2.cartuchos_map = p2CartMap;
+    next.patrullas.p2.cartuchos_map = p2Cart.cartuchos_map || {};
+    next.patrullas.p2.cartuchos_qty_map = p2Cart.cartuchos_qty_map || {};
 
     return next;
   }
 
-  async function cargarGuardiaDesdeServidor() {
+  
+  // ======================================================
+  // ✅ Preview en vivo: si cambiás Lugar/Obs/Selecciones,
+  // el JSON se refresca sin necesidad de guardar.
+  // (no escribe en servidor)
+  // ======================================================
+  function renderPreviewFromUI() {
+    try {
+      const next = buildStateFromUI();
+      // NO tocamos guardiaState persistido; solo preview visual
+      const pre = elPreview();
+      if (pre) pre.textContent = JSON.stringify(next || {}, null, 2);
+    } catch {}
+  }
+
+  function bindLivePreview() {
+    // selects + obs
+    [p1Lugar, p2Lugar].forEach((el) => el && el.addEventListener("change", renderPreviewFromUI));
+    [p1Obs, p2Obs].forEach((el) => el && el.addEventListener("input", renderPreviewFromUI));
+
+    // contenedores de checks (delegado)
+    [p1Personal, p2Personal, p1Moviles, p2Moviles, p1Elementos, p2Elementos, p1Cartuchos, p2Cartuchos].forEach((c) => {
+      if (!c) return;
+      c.addEventListener("change", renderPreviewFromUI);
+      c.addEventListener("input", renderPreviewFromUI);
+    });
+  }
+async function cargarGuardiaDesdeServidor() {
     const session = await getSessionOrNull(sb);
     if (!session) return null;
 
@@ -676,88 +777,7 @@ export function initGuardia({ sb, subtabs } = {}) {
     aplicarStateAGuardiaUI();
   }
 
-    // ======================================================
-  // ✅ Actualizar datos (sin tocar timestamps de acciones)
-  // - Guarda cambios de Lugar/Obs/Personal/Moviles/Elementos/Cartuchos
-  // - NO modifica estado/estado_ts de cada patrulla
-  // - NO agrega logs nuevos, y mantiene hora/ts originales
-  // - Opcional: actualiza el snapshot + resumen del ÚLTIMO log de cada patrulla
-  // ======================================================
-  function actualizarResumenYSnapshotEnUltimoLog(next, pKey) {
-    const up = String(pKey || "").toUpperCase();
-    if (!Array.isArray(next?.log)) return;
-
-    const idx = next.log.findIndex((e) => String(e?.patrulla || "").toUpperCase() === up);
-    if (idx === -1) return;
-
-    const pat = next?.patrullas?.[pKey] || {};
-    const perTxt = (pat.personal_ids || []).map((id) => invLabelFromValue("personal", id)).join(", ");
-    const movTxt = (pat.moviles || []).map((m) => invLabelFromValue("movil", m.movil_id)).join(", ");
-    const elemTxt = (pat.elementos_ids || []).map((id) => invLabelFromValue("elemento", id)).join(", ");
-    const resumen = `Personal: ${perTxt || "-"} | Movil(es): ${movTxt || "-"} | Elementos: ${elemTxt || "-"}`;
-
-    const e = next.log[idx] || {};
-    e.resumen = resumen;
-
-    e.snapshot = e.snapshot || {};
-    e.snapshot.lugar = pat.lugar || "";
-    e.snapshot.obs = pat.obs || "";
-    e.snapshot.personal_ids = Array.isArray(pat.personal_ids) ? [...pat.personal_ids] : [];
-    e.snapshot.moviles = Array.isArray(pat.moviles) ? cloneDeep(pat.moviles) : [];
-    e.snapshot.elementos_ids = Array.isArray(pat.elementos_ids) ? [...pat.elementos_ids] : [];
-    e.snapshot.cartuchos_map = pat.cartuchos_map ? cloneDeep(pat.cartuchos_map) : {};
-    e.snapshot.cartuchos_qty_map = pat.cartuchos_qty_map ? cloneDeep(pat.cartuchos_qty_map) : {};
-  }
-
-  async function onActualizarDatosGuardia() {
-    // Partimos del estado ACTUAL (con timestamps/logs originales)
-    const base = cloneDeep(guardiaState || {});
-    const ui = buildStateFromUI();
-
-    base.patrullas = base.patrullas || {};
-    base.patrullas.p1 = base.patrullas.p1 || {};
-    base.patrullas.p2 = base.patrullas.p2 || {};
-
-    // preservar estado/estado_ts (no tocar)
-    const p1Estado = { estado: base.patrullas.p1.estado, estado_ts: base.patrullas.p1.estado_ts };
-    const p2Estado = { estado: base.patrullas.p2.estado, estado_ts: base.patrullas.p2.estado_ts };
-
-    // copiar SOLO datos editables desde UI
-    base.patrullas.p1.lugar = ui.patrullas?.p1?.lugar || "";
-    base.patrullas.p1.obs = ui.patrullas?.p1?.obs || "";
-    base.patrullas.p1.personal_ids = ui.patrullas?.p1?.personal_ids || [];
-    base.patrullas.p1.moviles = ui.patrullas?.p1?.moviles || [];
-    base.patrullas.p1.elementos_ids = ui.patrullas?.p1?.elementos_ids || [];
-    base.patrullas.p1.cartuchos_map = ui.patrullas?.p1?.cartuchos_map || {};
-    base.patrullas.p1.cartuchos_qty_map = ui.patrullas?.p1?.cartuchos_qty_map || {};
-
-    base.patrullas.p2.lugar = ui.patrullas?.p2?.lugar || "";
-    base.patrullas.p2.obs = ui.patrullas?.p2?.obs || "";
-    base.patrullas.p2.personal_ids = ui.patrullas?.p2?.personal_ids || [];
-    base.patrullas.p2.moviles = ui.patrullas?.p2?.moviles || [];
-    base.patrullas.p2.elementos_ids = ui.patrullas?.p2?.elementos_ids || [];
-    base.patrullas.p2.cartuchos_map = ui.patrullas?.p2?.cartuchos_map || {};
-    base.patrullas.p2.cartuchos_qty_map = ui.patrullas?.p2?.cartuchos_qty_map || {};
-
-    // restaurar estado/estado_ts
-    base.patrullas.p1.estado = p1Estado.estado;
-    base.patrullas.p1.estado_ts = p1Estado.estado_ts;
-    base.patrullas.p2.estado = p2Estado.estado;
-    base.patrullas.p2.estado_ts = p2Estado.estado_ts;
-
-    // mantener log tal cual, pero actualizar snapshot/resumen del último log por patrulla
-    base.log = Array.isArray(base.log) ? base.log : [];
-    actualizarResumenYSnapshotEnUltimoLog(base, "p1");
-    actualizarResumenYSnapshotEnUltimoLog(base, "p2");
-
-    base.updated_at_ts = isoNow();
-
-    await guardarGuardiaEnServidor(base);
-    aplicarStateAGuardiaUI();
-    setEstado("Datos actualizados (sin cambiar horarios)");
-  }
-
-async function onActualizarGuardia({ invLoad } = {}) {
+  async function onActualizarGuardia({ invLoad } = {}) {
     const payload = await cargarGuardiaDesdeServidor();
     if (payload) setGuardiaState(payload);
     guardiaState = state?.guardia || payload || guardiaState;
@@ -813,6 +833,7 @@ async function onActualizarGuardia({ invLoad } = {}) {
             moviles: Array.isArray(pat.moviles) ? cloneDeep(pat.moviles) : [],
             elementos_ids: Array.isArray(pat.elementos_ids) ? [...pat.elementos_ids] : [],
             cartuchos_map: pat.cartuchos_map ? cloneDeep(pat.cartuchos_map) : {},
+            cartuchos_qty_map: pat.cartuchos_qty_map ? cloneDeep(pat.cartuchos_qty_map) : {},
           },
         });
 
@@ -879,13 +900,15 @@ async function onActualizarGuardia({ invLoad } = {}) {
     if (btnGuardiaActualizar) {
       btnGuardiaActualizar.addEventListener("click", () => onActualizarGuardia({ invLoad: null }).catch(console.error));
     }
-    if (btnGuardiaActualizarDatos) {
-      btnGuardiaActualizarDatos.addEventListener("click", () => onActualizarDatosGuardia().catch(console.error));
-    }
 
     bindAccionesEstado();
     bindReglaCartuchosLive();
+
+    if (p1Elementos) p1Elementos.addEventListener("change", () => applyEscopetaCrossLock());
+    if (p2Elementos) p2Elementos.addEventListener("change", () => applyEscopetaCrossLock());
     bindRefrescoPorGuardarOrden();
+
+    bindLivePreview();
 
     subscribeInventario(() => {
       renderGuardiaDesdeInventario();
