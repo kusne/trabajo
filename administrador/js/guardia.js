@@ -323,25 +323,43 @@ function buildOwnerMapFromArrays(p1Arr = [], p2Arr = []) {
   return owner;
 }
 
-function applyChipLocks(container, ownerMap, myKey) {
+function buildOwnerMapFromMoviles(p1Arr = [], p2Arr = []) {
+  const owner = new Map();
+  (Array.isArray(p1Arr) ? p1Arr : []).forEach((x) => {
+    const id = x?.movil_id ?? x;
+    if (id != null) owner.set(String(id), "p1");
+  });
+  (Array.isArray(p2Arr) ? p2Arr : []).forEach((x) => {
+    const id = x?.movil_id ?? x;
+    if (id == null) return;
+    const k = String(id);
+    if (!owner.has(k)) owner.set(k, "p2");
+  });
+  return owner;
+}
+
+function applyChipLocks(container, ownerMap, myKey, baseCheckedSet = new Set()) {
   if (!container) return;
 
   const inputs = Array.from(container.querySelectorAll('input[type="checkbox"][data-value]'));
   inputs.forEach((chk) => {
     const v = chk.getAttribute("data-value");
     const owner = ownerMap.get(String(v));
+    const wrap = chk.closest(".chip");
 
-    // reset
+    // reset default (clave para desbloquear bien)
     chk.removeAttribute("data-locked");
     chk.disabled = false;
-    chk.closest(".chip")?.classList.remove("is-locked");
+    if (wrap) wrap.classList.remove("is-locked");
+
+    // restaurar el estado real de ESTA patrulla
+    chk.checked = baseCheckedSet.has(String(v));
 
     if (owner && owner !== myKey) {
-      // bloqueado por otra patrulla: se ve rojo (checked) y no editable
       chk.checked = true;
       chk.disabled = true;
       chk.setAttribute("data-locked", "1");
-      chk.closest(".chip")?.classList.add("is-locked");
+      if (wrap) wrap.classList.add("is-locked");
     }
   });
 }
@@ -797,6 +815,9 @@ export function initGuardia({ sb, subtabs } = {}) {
 
     if (p1Obs) p1Obs.value = p1.obs || "";
     if (p2Obs) p2Obs.value = p2.obs || "";
+
+    refreshCrossLocks();
+
   }
 
   function aplicarStateAGuardiaUI() {
@@ -1091,6 +1112,48 @@ async function cargarGuardiaDesdeServidor() {
       });
     }
   }
+  // ======================================================
+  // BLOQUEO CRUZADO LIVE (P1 ↔ P2)
+  // - si P1 tilda => P2 queda rojo + bloqueado
+  // - si P1 destilda => P2 vuelve disponible (sin quedar tildado)
+  // ======================================================
+  function refreshCrossLocks() {
+    // personal
+    const p1Per = readCheckedValues(p1Personal);
+    const p2Per = readCheckedValues(p2Personal);
+    const perOwner = buildOwnerMapFromArrays(p1Per, p2Per);
+    applyChipLocks(p1Personal, perOwner, "p1", new Set(p1Per));
+    applyChipLocks(p2Personal, perOwner, "p2", new Set(p2Per));
+
+    // elementos
+    const p1El = readCheckedValues(p1Elementos);
+    const p2El = readCheckedValues(p2Elementos);
+    const elOwner = buildOwnerMapFromArrays(p1El, p2El);
+    applyChipLocks(p1Elementos, elOwner, "p1", new Set(p1El));
+    applyChipLocks(p2Elementos, elOwner, "p2", new Set(p2El));
+
+    // móviles
+    const p1Mov = readMoviles(p1Moviles);
+    const p2Mov = readMoviles(p2Moviles);
+    const movOwner = buildOwnerMapFromMoviles(p1Mov, p2Mov);
+    applyMovilLocks(p1Moviles, movOwner, "p1");
+    applyMovilLocks(p2Moviles, movOwner, "p2");
+  }
+
+  function bindCrossLocksLive() {
+    const hook = (container) => {
+      if (!container) return;
+      container.addEventListener("change", refreshCrossLocks);
+    };
+    hook(p1Personal);
+    hook(p2Personal);
+    hook(p1Elementos);
+    hook(p2Elementos);
+    hook(p1Moviles);
+    hook(p2Moviles);
+  }
+
+
 
   function bind() {
     if (btnGuardiaGuardar) btnGuardiaGuardar.addEventListener("click", () => onGuardarGuardia().catch(console.error));
@@ -1111,6 +1174,7 @@ async function cargarGuardiaDesdeServidor() {
     subscribeInventario(() => {
       renderGuardiaDesdeInventario();
       renderGuardiaPreview();
+      refreshCrossLocks();
     });
   }
 
