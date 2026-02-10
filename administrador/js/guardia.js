@@ -121,7 +121,7 @@ function renderChips(container, items, checkedValues = []) {
    Guardado: { movil_id, obs, libro, tvf }
    ====================================================== */
 
-function renderMoviles(container, items, selected = []) {
+function renderMoviles(container, items, selected = [], lockedMap = new Map()) {
   if (!container) return;
   container.innerHTML = "";
 
@@ -180,8 +180,11 @@ function renderMoviles(container, items, selected = []) {
 
     const id = `mov_${slugifyValue(it.value)}_${Math.random().toString(16).slice(2)}`;
 
-    const saved = selectedMap.get(it.value) || { movil_id: it.value, obs: "", libro: false, tvf: false };
-    const isSelected = selectedMap.has(it.value);
+        const own = selectedMap.get(it.value) || { movil_id: it.value, obs: "", libro: false, tvf: false };
+    const locked = lockedMap instanceof Map ? (lockedMap.get(String(it.value)) || null) : null;
+    const isLockedByOther = !!locked && !selectedMap.has(it.value);
+    const saved = isLockedByOther ? locked : own;
+    const isSelected = selectedMap.has(it.value) || isLockedByOther;
 
     // checkbox principal
     const chk = document.createElement("input");
@@ -191,6 +194,12 @@ function renderMoviles(container, items, selected = []) {
     chk.setAttribute("data-value", it.value);
     chk.style.width = "auto";
     chk.style.margin = "0";
+
+    if (isLockedByOther) {
+      chk.disabled = true;
+      chk.setAttribute("data-locked", "1");
+      row.classList.add("is-locked");
+    }
 
     // ✅ número/nombre del móvil (SPAN, NO label) para que tu CSS global no lo vuelva block
     const name = document.createElement("span");
@@ -231,6 +240,13 @@ function renderMoviles(container, items, selected = []) {
     obs.style.marginLeft = "auto"; // ✅ empuja Obs al extremo derecho
 
     const syncEnabled = () => {
+      if (isLockedByOther) {
+        // nunca habilitar edición en patrulla no dueña
+        obs.disabled = true;
+        flags.querySelectorAll('input[type="checkbox"][data-flag]').forEach((c) => (c.disabled = true));
+        return;
+      }
+
       const enabled = chk.checked;
 
       obs.disabled = !enabled;
@@ -262,6 +278,7 @@ function readMoviles(container) {
   rows.forEach((row) => {
     const chk = row.querySelector('input[type="checkbox"][data-value]');
     if (!chk?.checked) return;
+    if (chk.getAttribute("data-locked") === "1") return;
 
     const movil_id = chk.getAttribute("data-value");
 
@@ -278,6 +295,101 @@ function readMoviles(container) {
   });
 
   return out;
+}
+
+
+
+// ======================================================
+// BLOQUEO CRUZADO (P1 vs P2) - Personal / Elementos / Moviles
+// ======================================================
+
+function buildOwnerMapFromArrays(p1Arr = [], p2Arr = []) {
+  const owner = new Map();
+  (Array.isArray(p1Arr) ? p1Arr : []).forEach((v) => owner.set(String(v), "p1"));
+  (Array.isArray(p2Arr) ? p2Arr : []).forEach((v) => {
+    const k = String(v);
+    if (!owner.has(k)) owner.set(k, "p2");
+  });
+  return owner;
+}
+
+function applyChipLocks(container, ownerMap, myKey) {
+  if (!container) return;
+
+  const inputs = Array.from(container.querySelectorAll('input[type="checkbox"][data-value]'));
+  inputs.forEach((chk) => {
+    const v = chk.getAttribute("data-value");
+    const owner = ownerMap.get(String(v));
+
+    // reset
+    chk.removeAttribute("data-locked");
+    chk.disabled = false;
+    chk.closest(".chip")?.classList.remove("is-locked");
+
+    if (owner && owner !== myKey) {
+      // bloqueado por otra patrulla: se ve rojo (checked) y no editable
+      chk.checked = true;
+      chk.disabled = true;
+      chk.setAttribute("data-locked", "1");
+      chk.closest(".chip")?.classList.add("is-locked");
+    }
+  });
+}
+
+function buildLockedMovilMap(otherMoviles = []) {
+  const m = new Map();
+  (Array.isArray(otherMoviles) ? otherMoviles : []).forEach((x) => {
+    if (!x?.movil_id) return;
+    m.set(String(x.movil_id), {
+      movil_id: String(x.movil_id),
+      obs: (x?.obs || "").trim(),
+      libro: !!x?.libro,
+      tvf: !!x?.tvf,
+    });
+  });
+  return m;
+}
+
+function applyMovilLocks(container, ownerMap, myKey) {
+  if (!container) return;
+  const rows = Array.from(container.querySelectorAll(".row-inline"));
+  rows.forEach((row) => {
+    const chk = row.querySelector('input[type="checkbox"][data-value]');
+    if (!chk) return;
+
+    const v = chk.getAttribute("data-value");
+    const owner = ownerMap.get(String(v));
+
+    // reset base
+    const wasLocked = chk.getAttribute("data-locked") === "1";
+    chk.removeAttribute("data-locked");
+    chk.disabled = false;
+    row.classList.remove("is-locked");
+
+    if (owner && owner !== myKey) {
+      // bloquear (forzar checked)
+      chk.checked = true;
+      chk.disabled = true;
+      chk.setAttribute("data-locked", "1");
+      row.classList.add("is-locked");
+
+      row.querySelectorAll('input,textarea,select').forEach((el) => {
+        if (el === chk) return;
+        el.disabled = true;
+      });
+    } else {
+      // desbloquear: si era lock forzado, liberar selección
+      if (wasLocked) chk.checked = false;
+
+      // habilitar/inhabilitar internos según selección propia
+      const enabled = chk.checked;
+      const obs = row.querySelector('input[type="text"]');
+      if (obs) obs.disabled = !enabled;
+      row.querySelectorAll('input[type="checkbox"][data-flag]').forEach((c) => {
+        c.disabled = !enabled;
+      });
+    }
+  });
 }
 
 function aplicarReglaCartuchos(elementosContainer, cartuchosContainer, precomputedElementosIds = null) {
@@ -600,8 +712,10 @@ export function initGuardia({ sb, subtabs } = {}) {
     renderChips(p1Personal, pers, p1.personal_ids || []);
     renderChips(p2Personal, pers, p2.personal_ids || []);
 
-    renderMoviles(p1Moviles, movs, p1.moviles || []);
-    renderMoviles(p2Moviles, movs, p2.moviles || []);
+    const p1LockedMov = buildLockedMovilMap(p2.moviles || []);
+    const p2LockedMov = buildLockedMovilMap(p1.moviles || []);
+    renderMoviles(p1Moviles, movs, p1.moviles || [], p1LockedMov);
+    renderMoviles(p2Moviles, movs, p2.moviles || [], p2LockedMov);
 
     const isCartuchoId = (id) => {
       const lbl = invLabelFromValue("elemento", id).toLowerCase();
@@ -648,6 +762,28 @@ export function initGuardia({ sb, subtabs } = {}) {
 
     aplicarReglaCartuchos(p1Elementos, p1Cartuchos, p1Elems);
     aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2Elems);
+
+
+    // ==================================================
+    // ✅ BLOQUEO CRUZADO (render desde estado)
+    // - Personal: si lo usa una patrulla, queda rojo + bloqueado en la otra
+    // - Elementos: idem (incluye Escopetas/HT/etc)
+    // - Moviles: idem (con flags/obs visibles pero no editables)
+    // ==================================================
+    const personalOwner = buildOwnerMapFromArrays(p1.personal_ids || [], p2.personal_ids || []);
+    applyChipLocks(p1Personal, personalOwner, "p1");
+    applyChipLocks(p2Personal, personalOwner, "p2");
+
+    const elementosOwner = buildOwnerMapFromArrays(p1Elems || [], p2Elems || []);
+    applyChipLocks(p1Elementos, elementosOwner, "p1");
+    applyChipLocks(p2Elementos, elementosOwner, "p2");
+
+    const movOwner = buildOwnerMapFromArrays(
+      (p1.moviles || []).map((m) => String(m.movil_id)),
+      (p2.moviles || []).map((m) => String(m.movil_id))
+    );
+    applyMovilLocks(p1Moviles, movOwner, "p1");
+    applyMovilLocks(p2Moviles, movOwner, "p2");
 
     if (p1Obs) p1Obs.value = p1.obs || "";
     if (p2Obs) p2Obs.value = p2.obs || "";
@@ -852,6 +988,56 @@ async function cargarGuardiaDesdeServidor() {
     hook(p2Elementos, p2Cartuchos);
   }
 
+
+  // ======================================================
+  // ✅ BLOQUEO CRUZADO LIVE (sin guardar)
+  // Si marcás / desmarcás en P1, automáticamente se bloquea/desbloquea en P2 y viceversa.
+  // El bloqueo en la patrulla NO dueña se marca con data-locked="1" (no se guarda).
+  // ======================================================
+  function aplicarBloqueoCruzadoDesdeUI() {
+    try {
+      const p1PersonalIds = readCheckedValues(p1Personal);
+      const p2PersonalIds = readCheckedValues(p2Personal);
+
+      const p1Elem = readCheckedValues(p1Elementos);
+      const p2Elem = readCheckedValues(p2Elementos);
+
+      const p1MovIds = Array.from(p1Moviles?.querySelectorAll('input[type="checkbox"][data-value]') || [])
+        .filter((c) => c.checked && c.getAttribute("data-locked") !== "1")
+        .map((c) => String(c.getAttribute("data-value")));
+      const p2MovIds = Array.from(p2Moviles?.querySelectorAll('input[type="checkbox"][data-value]') || [])
+        .filter((c) => c.checked && c.getAttribute("data-locked") !== "1")
+        .map((c) => String(c.getAttribute("data-value")));
+
+      const personalOwner = buildOwnerMapFromArrays(p1PersonalIds, p2PersonalIds);
+      applyChipLocks(p1Personal, personalOwner, "p1");
+      applyChipLocks(p2Personal, personalOwner, "p2");
+
+      const elementosOwner = buildOwnerMapFromArrays(p1Elem, p2Elem);
+      applyChipLocks(p1Elementos, elementosOwner, "p1");
+      applyChipLocks(p2Elementos, elementosOwner, "p2");
+
+      const movOwner = buildOwnerMapFromArrays(p1MovIds, p2MovIds);
+      applyMovilLocks(p1Moviles, movOwner, "p1");
+      applyMovilLocks(p2Moviles, movOwner, "p2");
+    } catch {}
+  }
+
+  function bindBloqueoCruzadoLive() {
+    const hook = (container) => {
+      if (!container) return;
+      container.addEventListener("change", () => {
+        aplicarBloqueoCruzadoDesdeUI();
+      });
+    };
+    hook(p1Personal);
+    hook(p2Personal);
+    hook(p1Elementos);
+    hook(p2Elementos);
+    hook(p1Moviles);
+    hook(p2Moviles);
+  }
+
   function bindRefrescoPorGuardarOrden() {
     const btnGuardarOrden =
       document.querySelector('button[onclick*="agregarOrden"]') ||
@@ -903,6 +1089,7 @@ async function cargarGuardiaDesdeServidor() {
 
     bindAccionesEstado();
     bindReglaCartuchosLive();
+    bindBloqueoCruzadoLive();
 
     if (p1Elementos) p1Elementos.addEventListener("change", () => applyEscopetaCrossLock());
     if (p2Elementos) p2Elementos.addEventListener("change", () => applyEscopetaCrossLock());
