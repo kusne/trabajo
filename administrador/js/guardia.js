@@ -61,15 +61,24 @@ function getSubgrupoLabel(meta) {
   return raw ? String(raw).trim() : "";
 }
 
-function groupElementosBySubgrupo(elementoValues = []) {
-  const map = new Map();
-  elementoValues.forEach((val) => {
-    const meta = invActivos("elemento").find((x) => x.value === val)?.meta || {};
-    const label = getSubgrupoLabel(meta) || "Otros";
-    if (!map.has(label)) map.set(label, []);
-    map.get(label).push(val);
+function groupElementosBySubgrupo(elementos = []) {
+  // Acepta: array de values (string) o array de items {value,label,meta}
+  const items = (Array.isArray(elementos) ? elementos : []).map((x) => {
+    if (x && typeof x === "object" && x.value) return x;
+    const val = String(x || "");
+    const it = invActivos("elemento").find((e) => e.value === val);
+    return it ? it : { value: val, label: val, meta: {} };
   });
 
+  const map = new Map();
+  items.forEach((it) => {
+    const meta = it?.meta || {};
+    const label = getSubgrupoLabel(meta) || "Otros";
+    if (!map.has(label)) map.set(label, []);
+    map.get(label).push(it.value);
+  });
+
+  // orden por SUBGRUPOS_ORDEN (lo que no está, al final)
   const keys = Array.from(map.keys());
   keys.sort((a, b) => {
     const ia = SUBGRUPOS_ORDEN.indexOf(a);
@@ -106,6 +115,7 @@ function renderChips(container, items, checkedValues = []) {
     chk.id = id;
     chk.setAttribute("data-value", it.value);
     chk.checked = checkedValues.includes(it.value);
+    chk.setAttribute("data-base-checked", chk.checked ? "1" : "0");
 
     const span = document.createElement("span");
     span.textContent = it.label;
@@ -703,7 +713,7 @@ export function initGuardia({ sb, subtabs } = {}) {
     const elemsUI = elems.filter((it) => {
       const sub = getSubgrupoLabel(it?.meta || {});
       const lbl = String(it?.label || "").toLowerCase();
-      return String(sub).toLowerCase() !== "cartuchos" && !lbl.includes("cartucho");
+      return String(sub).toLowerCase() !== "cartuchos" && !lbl.includes("cartucho") && !lbl.includes("escopeta 12/70");
     });
 
     const p1 = guardiaState?.patrullas?.p1 || {};
@@ -730,7 +740,7 @@ export function initGuardia({ sb, subtabs } = {}) {
     const p2Elems = p2ElemsRaw.filter((id) => !isCartuchoId(id));
     
 
-    const groups1 = groupElementosBySubgrupo(elemsUI.map((x) => x.value));
+    const groups1 = groupElementosBySubgrupo(elemsUI);
     const groups2 = groups1;
 
     const renderElementosGrouped = (container, checked, groups) => {
@@ -757,8 +767,8 @@ export function initGuardia({ sb, subtabs } = {}) {
     renderElementosGrouped(p1Elementos, p1Elems, groups1);
     renderElementosGrouped(p2Elementos, p2Elems, groups2);
 
-    renderCartuchos(p1Cartuchos, p1.cartuchos_qty || p1.cartuchos_map || {});
-    renderCartuchos(p2Cartuchos, p2.cartuchos_qty || p2.cartuchos_map || {});
+    renderCartuchos(p1Cartuchos, p1.cartuchos_map || {}, p1.cartuchos_qty_map || {});
+    renderCartuchos(p2Cartuchos, p2.cartuchos_map || {}, p2.cartuchos_qty_map || {});
 
     aplicarReglaCartuchos(p1Elementos, p1Cartuchos, p1Elems);
     aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2Elems);
@@ -969,6 +979,7 @@ async function cargarGuardiaDesdeServidor() {
             moviles: Array.isArray(pat.moviles) ? cloneDeep(pat.moviles) : [],
             elementos_ids: Array.isArray(pat.elementos_ids) ? [...pat.elementos_ids] : [],
             cartuchos_map: pat.cartuchos_map ? cloneDeep(pat.cartuchos_map) : {},
+            cartuchos_qty_map: pat.cartuchos_qty_map ? cloneDeep(pat.cartuchos_qty_map) : {},
             cartuchos_qty_map: pat.cartuchos_qty_map ? cloneDeep(pat.cartuchos_qty_map) : {},
           },
         });
