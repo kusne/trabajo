@@ -31,322 +31,462 @@ function normalizeKey(s) {
     .replace(/[íìïî]/g, "i")
     .replace(/[óòöô]/g, "o")
     .replace(/[úùüû]/g, "u")
-    .replace(/ñ/g, "n")
-    .replace(/[^a-z0-9]+/g, "");
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
 }
 
-function canonSubgrupo(raw) {
+function getSubgrupoLabel(meta) {
+  const raw = meta?.subgrupo || meta?.subGroup || meta?.grupo || meta?.group || "";
   const k = normalizeKey(raw);
-  if (!k) return "SinSubgrupo";
-
-  if (k === "pda" || k === "pdas") return "PDAs";
-  if (k === "alometro" || k === "alometros") return "Alometros";
-  if (k === "alcoholimetro" || k === "alcoholimetros") return "Alcoholimetros";
-  if (k === "impresora" || k === "impresoras") return "Impresoras";
-  if (k === "ht" || k === "handy" || k === "handytalkie" || k === "handywalkie") return "Ht";
-  if (k === "escopeta" || k === "escopetas") return "Escopetas";
-  if (k === "cartucho" || k === "cartuchos") return "Cartuchos";
-
   if (SUBGRUPO_KEY_TO_LABEL.has(k)) return SUBGRUPO_KEY_TO_LABEL.get(k);
-
-  const cleaned = String(raw || "").trim();
-  return cleaned || "SinSubgrupo";
+  return raw ? String(raw).trim() : "";
 }
 
-function isSubgrupo(item, labelCanon) {
-  const sg = canonSubgrupo(item?.meta?.subgrupo);
-  return sg === labelCanon;
-}
-
-function lugaresDesdeOrdenes() {
-  if (typeof StorageApp === "undefined" || !StorageApp.cargarOrdenes) return [];
-  const ordenes = StorageApp.cargarOrdenes();
-  const set = new Set();
-
-  (ordenes || []).forEach((o) => {
-    (o?.franjas || []).forEach((f) => {
-      const lug = normalizarLugar(f?.lugar);
-      if (lug) set.add(lug);
-    });
+function groupElementosBySubgrupo(elementoValues = []) {
+  const map = new Map();
+  elementoValues.forEach((val) => {
+    const meta = invActivos("elemento").find((x) => x.value === val)?.meta || {};
+    const label = getSubgrupoLabel(meta) || "Otros";
+    if (!map.has(label)) map.set(label, []);
+    map.get(label).push(val);
   });
 
-  return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
-}
-
-function fillLugarSelect(selectEl) {
-  if (!selectEl) return;
-  const lugares = lugaresDesdeOrdenes();
-  const actual = selectEl.value || "";
-  selectEl.innerHTML = `<option value="">Seleccionar lugar</option>`;
-  lugares.forEach((l) => {
-    const opt = document.createElement("option");
-    opt.value = l;
-    opt.textContent = l;
-    selectEl.appendChild(opt);
+  const keys = Array.from(map.keys());
+  keys.sort((a, b) => {
+    const ia = SUBGRUPOS_ORDEN.indexOf(a);
+    const ib = SUBGRUPOS_ORDEN.indexOf(b);
+    if (ia === -1 && ib === -1) return a.localeCompare(b);
+    if (ia === -1) return 1;
+    if (ib === -1) return -1;
+    return ia - ib;
   });
-  if (actual && lugares.includes(actual)) selectEl.value = actual;
-}
-
-export function cargarLugaresParaGuardia({ p1Lugar, p2Lugar } = {}) {
-  fillLugarSelect(p1Lugar);
-  fillLugarSelect(p2Lugar);
-}
-
-function chipsCheckbox(container, items, { prefix }) {
-  if (!container) return;
-  if (!items.length) {
-    container.innerHTML = `<div class="muted">Sin datos.</div>`;
-    return;
-  }
-
-  container.innerHTML = items
-    .map((it, idx) => {
-      const id = `${prefix}_${idx}`;
-      return `
-        <label class="checkbox-container" style="display:flex; align-items:center; gap:8px; border:1px solid #ddd; padding:6px 10px; border-radius:999px;">
-          <input type="checkbox" id="${esc(id)}" value="${esc(it.value)}">
-          <span>${esc(it.label)}</span>
-        </label>
-      `;
-    })
-    .join("");
-}
-
-function renderMoviles(container, moviles, { prefix }) {
-  if (!container) return;
-  if (!moviles.length) {
-    container.innerHTML = `<div class="muted">Sin móviles activos.</div>`;
-    return;
-  }
-
-  container.innerHTML = moviles
-    .map((m, idx) => {
-      const baseId = `${prefix}_mov_${idx}`;
-      return `
-        <div style="display:flex; align-items:center; gap:10px; border:1px solid #ddd; border-radius:12px; padding:8px 10px; margin:6px 0; background:#fff;">
-          <label style="display:flex; align-items:center; gap:8px; min-width:180px;">
-            <input type="checkbox" data-movil-pick="1" data-movil-id="${esc(m.value)}" id="${esc(baseId)}">
-            <span style="font-weight:700;">${esc(m.label)}</span>
-          </label>
-
-          <label class="muted" style="display:flex; align-items:center; gap:6px;">
-            <input type="checkbox" data-movil-flag="libro" data-movil-id="${esc(m.value)}" disabled>
-            libro
-          </label>
-
-          <label class="muted" style="display:flex; align-items:center; gap:6px;">
-            <input type="checkbox" data-movil-flag="llave" data-movil-id="${esc(m.value)}" disabled>
-            llave
-          </label>
-
-          <label class="muted" style="display:flex; align-items:center; gap:6px;">
-            <input type="checkbox" data-movil-flag="tvf" data-movil-id="${esc(m.value)}" disabled>
-            tvf
-          </label>
-        </div>
-      `;
-    })
-    .join("");
-
-  container.querySelectorAll('input[data-movil-pick="1"]').forEach((chk) => {
-    chk.addEventListener("change", () => {
-      const movilId = chk.getAttribute("data-movil-id");
-      const enabled = chk.checked;
-      const flags = container.querySelectorAll(
-        `input[data-movil-flag][data-movil-id="${CSS.escape(movilId)}"]`
-      );
-      flags.forEach((f) => {
-        f.disabled = !enabled;
-        if (!enabled) f.checked = false;
-      });
-    });
-  });
-}
-
-function groupElementos(elementosActivos) {
-  const groups = new Map();
-
-  (elementosActivos || []).forEach((e) => {
-    const sgCanon = canonSubgrupo(e?.meta?.subgrupo);
-    if (!groups.has(sgCanon)) groups.set(sgCanon, []);
-    groups.get(sgCanon).push(e);
-  });
-
-  for (const [k, arr] of groups.entries()) {
-    arr.sort((a, b) => (a.orden - b.orden) || String(a.label).localeCompare(String(b.label), "es"));
-    groups.set(k, arr);
-  }
 
   const ordered = [];
-  SUBGRUPOS_ORDEN.forEach((sg) => {
-    if (groups.has(sg)) ordered.push([sg, groups.get(sg)]);
-  });
-
-  Array.from(groups.keys())
-    .filter((k) => !SUBGRUPOS_ORDEN.includes(k))
-    .sort((a, b) => a.localeCompare(b, "es"))
-    .forEach((k) => ordered.push([k, groups.get(k)]));
-
+  keys.forEach((k) => ordered.push([k, map.get(k)]));
   return ordered;
-}
-
-function renderElementos(container, elementosActivos, { prefix }) {
-  if (!container) return;
-  if (!elementosActivos.length) {
-    container.innerHTML = `<div class="muted">Sin elementos activos.</div>`;
-    return;
-  }
-
-  const grouped = groupElementos(elementosActivos);
-
-  container.innerHTML = grouped
-    .map(([sg, items]) => {
-      const listId = `${prefix}_sg_${slugifyValue(sg)}`;
-      return `
-        <div style="border:1px solid #e5e5e5; border-radius:14px; padding:10px; margin:10px 0; background:#fff;">
-          <div style="font-weight:800; margin-bottom:8px;">${esc(sg)}</div>
-          <div id="${esc(listId)}" style="display:flex; flex-wrap:wrap; gap:8px;"></div>
-        </div>
-      `;
-    })
-    .join("");
-
-  grouped.forEach(([sg, items]) => {
-    const listId = `${prefix}_sg_${slugifyValue(sg)}`;
-    const holder = container.querySelector(`#${CSS.escape(listId)}`);
-    if (!holder) return;
-    chipsCheckbox(holder, items, { prefix: `${listId}_it` });
-  });
-}
-
-function renderCartuchos(container, cartuchosItems, { prefix }) {
-  if (!container) return;
-  if (!cartuchosItems.length) {
-    container.innerHTML = `<div class="muted">Sin cartuchos en inventario.</div>`;
-    return;
-  }
-
-  container.innerHTML = cartuchosItems
-    .map((c, idx) => {
-      const id = `${prefix}_car_${idx}`;
-      const tipo = String(c?.meta?.cartucho_tipo || "").toUpperCase();
-      return `
-        <div style="display:flex; align-items:center; gap:10px; border:1px solid #ddd; border-radius:12px; padding:8px 10px; margin:6px 0; background:#fff;">
-          <label style="display:flex; align-items:center; gap:8px; min-width:260px;">
-            <input type="checkbox" data-cartucho-pick="1" data-cartucho-id="${esc(c.value)}" id="${esc(id)}">
-            <span style="font-weight:700;">${esc(c.label)}</span>
-            <span class="muted">${tipo ? "(" + esc(tipo) + ")" : ""}</span>
-          </label>
-
-          <div style="width:140px;">
-            <input type="number" min="0" step="1" class="full"
-              data-cartucho-qty="1" data-cartucho-id="${esc(c.value)}" disabled
-              placeholder="cantidad">
-          </div>
-        </div>
-      `;
-    })
-    .join("");
-
-  container.querySelectorAll('input[data-cartucho-pick="1"]').forEach((chk) => {
-    chk.addEventListener("change", () => {
-      const id = chk.getAttribute("data-cartucho-id");
-      const qty = container.querySelector(
-        `input[data-cartucho-qty="1"][data-cartucho-id="${CSS.escape(id)}"]`
-      );
-      if (!qty) return;
-      qty.disabled = !chk.checked;
-      if (!chk.checked) qty.value = "";
-    });
-  });
 }
 
 function readCheckedValues(container) {
   if (!container) return [];
-  return Array.from(container.querySelectorAll('input[type="checkbox"]'))
-    .filter((x) => x.checked && x.value)
-    .map((x) => x.value);
+  return Array.from(container.querySelectorAll("input[type=checkbox][data-value]"))
+    .filter((x) => x.checked)
+    .map((x) => x.getAttribute("data-value"))
+    .filter(Boolean);
+}
+
+function renderChips(container, items, checkedValues = []) {
+  if (!container) return;
+  container.innerHTML = "";
+  items.forEach((it) => {
+    const id = `chk_${slugifyValue(it.value)}_${Math.random().toString(16).slice(2)}`;
+    const wrap = document.createElement("label");
+    wrap.className = "chip";
+
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.id = id;
+    chk.setAttribute("data-value", it.value);
+    chk.checked = checkedValues.includes(it.value);
+
+    const span = document.createElement("span");
+    span.textContent = it.label;
+
+    wrap.appendChild(chk);
+    wrap.appendChild(span);
+    container.appendChild(wrap);
+  });
+}
+
+/* ======================================================
+   ✅ MOVILES (con Libro/TVF por retiro + número a la izquierda)
+   Guardado: { movil_id, obs, libro, tvf }
+   ====================================================== */
+
+function renderMoviles(container, items, selected = []) {
+  if (!container) return;
+  container.innerHTML = "";
+
+  // normaliza selected (compat: viejos sin libro/tvf)
+  const selectedMap = new Map(
+    (Array.isArray(selected) ? selected : []).map((x) => [
+      x?.movil_id,
+      {
+        movil_id: x?.movil_id,
+        obs: (x?.obs || "").trim(),
+        libro: !!x?.libro,
+        tvf: !!x?.tvf,
+      },
+    ])
+  );
+
+  function mkFlag(labelTxt, dataFlag, checked, disabled) {
+    // OJO: uso label para click fácil, pero lo “anulo” para que no lo pise tu CSS global de label
+    const wrap = document.createElement("label");
+    wrap.className = "mov-flag";
+    // ✅ fuerza inline (mata display:block y márgenes globales)
+    wrap.style.display = "inline-flex";
+    wrap.style.alignItems = "center";
+    wrap.style.gap = "6px";
+    wrap.style.margin = "0";
+    wrap.style.padding = "0";
+    wrap.style.fontWeight = "600";
+    wrap.style.cursor = "pointer";
+    wrap.style.userSelect = "none";
+
+    const c = document.createElement("input");
+    c.type = "checkbox";
+    c.checked = !!checked;
+    c.disabled = !!disabled;
+    c.setAttribute("data-flag", dataFlag);
+    c.style.width = "auto";
+    c.style.margin = "0";
+
+    const t = document.createElement("span");
+    t.textContent = labelTxt;
+
+    wrap.appendChild(c);
+    wrap.appendChild(t);
+    return wrap;
+  }
+
+  items.forEach((it) => {
+    const row = document.createElement("div");
+    row.className = "row-inline";
+
+    // ✅ fuerza layout SIEMPRE: [chk] [NUM] [Libro TVF] [Obs...]
+    row.style.display = "flex";
+    row.style.alignItems = "center";
+    row.style.gap = "10px";
+    row.style.flexWrap = "nowrap";
+
+    const id = `mov_${slugifyValue(it.value)}_${Math.random().toString(16).slice(2)}`;
+
+    const saved = selectedMap.get(it.value) || { movil_id: it.value, obs: "", libro: false, tvf: false };
+    const isSelected = selectedMap.has(it.value);
+
+    // checkbox principal
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.id = id;
+    chk.checked = isSelected;
+    chk.setAttribute("data-value", it.value);
+    chk.style.width = "auto";
+    chk.style.margin = "0";
+
+    // ✅ número/nombre del móvil (SPAN, NO label) para que tu CSS global no lo vuelva block
+    const name = document.createElement("span");
+    name.className = "movil-name";
+    name.textContent = it.label;
+
+    // ✅ forzado: queda pegado al checkbox, sin ocupar el centro
+    name.style.display = "inline-flex";
+    name.style.alignItems = "center";
+    name.style.margin = "0";
+    name.style.padding = "0";
+    name.style.fontWeight = "800";
+    name.style.whiteSpace = "nowrap";
+    name.style.flex = "0 0 auto";
+    name.style.minWidth = "72px"; // ajustable si querés
+
+    // flags (Libro/TVF) a la derecha del número
+    const flags = document.createElement("div");
+    flags.className = "mov-flags";
+    flags.style.display = "flex";
+    flags.style.alignItems = "center";
+    flags.style.gap = "10px";
+    flags.style.flex = "0 0 auto";
+
+    const flagLibro = mkFlag("Libro", "libro", saved.libro, !chk.checked);
+    const flagTvf = mkFlag("TVF", "tvf", saved.tvf, !chk.checked);
+
+    flags.appendChild(flagLibro);
+    flags.appendChild(flagTvf);
+
+    // obs a la derecha del todo
+    const obs = document.createElement("input");
+    obs.type = "text";
+    obs.placeholder = "Obs (opcional)";
+    obs.className = "mini";
+    obs.value = saved.obs || "";
+    obs.disabled = !chk.checked;
+    obs.style.marginLeft = "auto"; // ✅ empuja Obs al extremo derecho
+
+    const syncEnabled = () => {
+      const enabled = chk.checked;
+
+      obs.disabled = !enabled;
+      if (!enabled) obs.value = "";
+
+      flags.querySelectorAll('input[type="checkbox"][data-flag]').forEach((c) => {
+        c.disabled = !enabled;
+        if (!enabled) c.checked = false;
+      });
+    };
+
+    chk.addEventListener("change", syncEnabled);
+    syncEnabled();
+
+    row.appendChild(chk);
+    row.appendChild(name);
+    row.appendChild(flags);
+    row.appendChild(obs);
+
+    container.appendChild(row);
+  });
 }
 
 function readMoviles(container) {
   if (!container) return [];
-
-  const picks = Array.from(container.querySelectorAll('input[data-movil-pick="1"]'));
+  const rows = Array.from(container.querySelectorAll(".row-inline"));
   const out = [];
 
-  picks.forEach((p) => {
-    if (!p.checked) return;
-    const movil_id = p.getAttribute("data-movil-id");
+  rows.forEach((row) => {
+    const chk = row.querySelector('input[type="checkbox"][data-value]');
+    if (!chk?.checked) return;
 
-    const libro = !!container.querySelector(
-      `input[data-movil-flag="libro"][data-movil-id="${CSS.escape(movil_id)}"]`
-    )?.checked;
-    const llave = !!container.querySelector(
-      `input[data-movil-flag="llave"][data-movil-id="${CSS.escape(movil_id)}"]`
-    )?.checked;
-    const tvf = !!container.querySelector(
-      `input[data-movil-flag="tvf"][data-movil-id="${CSS.escape(movil_id)}"]`
-    )?.checked;
+    const movil_id = chk.getAttribute("data-value");
 
-    out.push({ movil_id, libro, llave, tvf });
-  });
+    const obs = row.querySelector('input[type="text"]');
+    const libro = row.querySelector('input[type="checkbox"][data-flag="libro"]');
+    const tvf = row.querySelector('input[type="checkbox"][data-flag="tvf"]');
 
-  return out;
-}
-
-function readCartuchos(container) {
-  if (!container) return {};
-  const picks = Array.from(container.querySelectorAll('input[data-cartucho-pick="1"]'));
-  const out = {};
-  picks.forEach((p) => {
-    if (!p.checked) return;
-    const id = p.getAttribute("data-cartucho-id");
-    const qtyEl = container.querySelector(
-      `input[data-cartucho-qty="1"][data-cartucho-id="${CSS.escape(id)}"]`
-    );
-    const qty = Number(qtyEl?.value || 0);
-    out[id] = isNaN(qty) ? 0 : qty;
-  });
-  return out;
-}
-
-function patrullaTieneEscopeta(elementos_ids) {
-  const escopetas = invActivos("elemento").filter((e) => isSubgrupo(e, "Escopetas"));
-  const escIds = new Set(escopetas.map((x) => x.value));
-  return (elementos_ids || []).some((id) => escIds.has(id));
-}
-
-function aplicarReglaCartuchos(elContainer, cartContainer, elementos_ids_override) {
-  if (!cartContainer) return;
-
-  const elementos_ids =
-    Array.isArray(elementos_ids_override) ? elementos_ids_override : readCheckedValues(elContainer);
-
-  const hayEscopeta = patrullaTieneEscopeta(elementos_ids);
-
-  cartContainer.querySelectorAll('input[data-cartucho-pick="1"]').forEach((chk) => {
-    chk.disabled = !hayEscopeta;
-    if (!hayEscopeta) chk.checked = false;
-  });
-  cartContainer.querySelectorAll('input[data-cartucho-qty="1"]').forEach((inp) => {
-    inp.disabled = true;
-    if (!hayEscopeta) inp.value = "";
-  });
-
-  if (hayEscopeta) {
-    cartContainer.querySelectorAll('input[data-cartucho-pick="1"]').forEach((chk) => {
-      chk.disabled = false;
-      chk.dispatchEvent(new Event("change"));
+    out.push({
+      movil_id,
+      obs: (obs?.value || "").trim(),
+      libro: !!libro?.checked,
+      tvf: !!tvf?.checked,
     });
+  });
+
+  return out;
+}
+
+function aplicarReglaCartuchos(elementosContainer, cartuchosContainer, precomputedElementosIds = null) {
+  if (!elementosContainer || !cartuchosContainer) return;
+
+  const elementosIds = precomputedElementosIds || readCheckedValues(elementosContainer);
+  const hayEscopeta = elementosIds.some((id) => {
+    const label = invLabelFromValue("elemento", id).toLowerCase();
+    return label.includes("escopeta");
+  });
+
+  cartuchosContainer.style.display = hayEscopeta ? "block" : "none";
+  if (!hayEscopeta) {
+    cartuchosContainer.querySelectorAll("input[type=checkbox]").forEach((c) => (c.checked = false));
   }
 }
 
+function renderCartuchos(container, checkedMap = {}, qtyMap = {}) {
+  if (!container) return;
+  container.innerHTML = "";
+
+  // Cartuchos cal. 12/70 (solo visibles si hay Escopeta)
+  const tipos = [
+    { key: "at_12_70", label: "AT cal 12/70" },
+    { key: "pg_12_70", label: "PG cal 12/70" },
+  ];
+
+  // Compat: si antes guardaste SOLO cantidades en cartuchos_qty (map num),
+  // marcamos checked cuando qty > 0
+  const qtyLegacy = qtyMap && typeof qtyMap === "object" && !Array.isArray(qtyMap) ? qtyMap : {};
+  const checkedLegacy = {};
+  Object.keys(qtyLegacy).forEach((k) => {
+    const n = parseInt(qtyLegacy[k], 10);
+    if (!Number.isNaN(n) && n > 0) checkedLegacy[k] = true;
+  });
+
+  tipos.forEach((t) => {
+    const id = `cart_${t.key}_${Math.random().toString(16).slice(2)}`;
+
+    const wrap = document.createElement("div");
+    wrap.className = "cart-row";
+
+    const chip = document.createElement("label");
+    chip.className = "chip";
+
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.id = id;
+    chk.setAttribute("data-key", t.key);
+    chk.checked = Boolean(checkedMap?.[t.key] ?? checkedLegacy?.[t.key]);
+
+    const span = document.createElement("span");
+    span.textContent = t.label;
+
+    chip.appendChild(chk);
+    chip.appendChild(span);
+
+    const qty = document.createElement("input");
+    qty.type = "number";
+    qty.min = "0";
+    qty.step = "1";
+    qty.placeholder = "Cant.";
+    qty.className = "cart-qty";
+    qty.setAttribute("data-key", t.key);
+
+    const rawQty = qtyMap?.[t.key];
+    const qtyVal = Math.max(0, parseInt(rawQty, 10) || 0);
+    qty.value = String(qtyVal);
+
+    qty.disabled = !chk.checked;
+
+    chk.addEventListener("change", () => {
+      qty.disabled = !chk.checked;
+      if (!chk.checked) qty.value = "0";
+    });
+
+    wrap.appendChild(chip);
+    wrap.appendChild(qty);
+    container.appendChild(wrap);
+  });
+}
+
+function readCartuchos(container) {
+  if (!container) return { cartuchos_map: {}, cartuchos_qty_map: {} };
+
+  const cartuchos_map = {};
+  const cartuchos_qty_map = {};
+
+  const rows = Array.from(container.querySelectorAll(".cart-row"));
+  rows.forEach((row) => {
+    const chk = row.querySelector('input[type="checkbox"][data-key]');
+    const qty = row.querySelector('input[type="number"][data-key]');
+    const key = chk?.getAttribute("data-key") || qty?.getAttribute("data-key");
+    if (!key) return;
+
+    const isOn = !!chk?.checked;
+    cartuchos_map[key] = isOn;
+
+    if (isOn) {
+      const raw = String(qty?.value ?? "").trim();
+      const num = Math.max(0, parseInt(raw, 10) || 0);
+      cartuchos_qty_map[key] = num;
+    }
+  });
+
+  return { cartuchos_map, cartuchos_qty_map };
+}
+
+function formatLogEntry(e) {
+  const ts = e?.hora || "";
+  const p = e?.patrulla || "";
+  const a = e?.accion || "";
+  const r = e?.resumen || "";
+  return `${ts} ${p} ${a}: ${r}`;
+}
+
+function getLugaresFromFranjasTextarea() {
+  const t = document.getElementById("franjas")?.value || "";
+  const out = new Set();
+
+  t.split("\n").forEach((line) => {
+    const s = String(line || "").trim();
+    if (!s) return;
+
+    let parts = s.split(" - ").map((x) => x.trim()).filter(Boolean);
+    if (parts.length < 2) {
+      parts = s.split("-").map((x) => x.trim()).filter(Boolean);
+    }
+    if (parts.length < 2) return;
+
+    const lugar = normalizarLugar(parts[1]);
+    if (lugar) out.add(lugar);
+  });
+
+  return Array.from(out).sort((a, b) => a.localeCompare(b));
+}
+
+function getLugaresFromOrdenes() {
+  const out = new Set();
+  const ords = Array.isArray(state?.ordenes) ? state.ordenes : [];
+  ords.forEach((o) => {
+    const franjas = Array.isArray(o?.franjas) ? o.franjas : [];
+    franjas.forEach((f) => {
+      const l = normalizarLugar(f?.lugar || "");
+      if (l) out.add(l);
+    });
+  });
+  return Array.from(out).sort((a, b) => a.localeCompare(b));
+}
+
+function tryGetOrdenesFromStorageApp() {
+  try {
+    const sa = window.storageApp;
+    if (sa) {
+      if (typeof sa.getOrdenes === "function") return sa.getOrdenes() || [];
+      if (typeof sa.listOrdenes === "function") return sa.listOrdenes() || [];
+      if (typeof sa.getAllOrdenes === "function") return sa.getAllOrdenes() || [];
+      if (Array.isArray(sa.ordenes)) return sa.ordenes || [];
+    }
+
+    const keys = ["ordenes_operacionales", "ordenesOperacionales", "ordenes", "orders", "ordenes_storage"];
+
+    for (const k of keys) {
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw);
+
+      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed?.ordenes)) return parsed.ordenes;
+      if (Array.isArray(parsed?.items)) return parsed.items;
+    }
+
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+function extractLugaresFromOrdenesArray(ords) {
+  const out = new Set();
+
+  (Array.isArray(ords) ? ords : []).forEach((o) => {
+    const franjas = Array.isArray(o?.franjas) ? o.franjas : [];
+    franjas.forEach((f) => {
+      const l = normalizarLugar(f?.lugar || "");
+      if (l) out.add(l);
+    });
+
+    const franjasTxt = String(o?.franjasTexto || o?.franjas_texto || "").trim();
+    if (franjasTxt) {
+      franjasTxt.split("\n").forEach((line) => {
+        const s = line.trim();
+        if (!s) return;
+
+        let parts = s.split(" - ").map((x) => x.trim()).filter(Boolean);
+        if (parts.length < 2) parts = s.split("-").map((x) => x.trim()).filter(Boolean);
+        if (parts.length < 2) return;
+
+        const lugar = normalizarLugar(parts[1]);
+        if (lugar) out.add(lugar);
+      });
+    }
+  });
+
+  return Array.from(out).sort((a, b) => a.localeCompare(b));
+}
+
+function getLugaresSmart() {
+  const fromState = getLugaresFromOrdenes();
+  if (fromState.length) return fromState;
+
+  const ordsStored = tryGetOrdenesFromStorageApp();
+  const fromStored = extractLugaresFromOrdenesArray(ordsStored);
+  if (fromStored.length) return fromStored;
+
+  const fromFranjas = getLugaresFromFranjasTextarea();
+  if (fromFranjas.length) return fromFranjas;
+
+  return [];
+}
+
 export function initGuardia({ sb, subtabs } = {}) {
-  const guardiaEstadoTxt = document.getElementById("guardiaEstadoTxt");
+  const elEstadoTxt = () => document.getElementById("guardiaEstadoTxt");
+  const elPreview = () => document.getElementById("guardiaJsonPreview");
+
   const btnGuardiaGuardar = document.getElementById("btnGuardiaGuardar");
   const btnGuardiaActualizar = document.getElementById("btnGuardiaActualizar");
   const btnGuardiaActualizarDatos = document.getElementById("btnGuardiaActualizarDatos");
-  const preGuardia = document.getElementById("guardiaJsonPreview");
 
   const p1Lugar = document.getElementById("p1Lugar");
   const p1Obs = document.getElementById("p1Obs");
@@ -362,119 +502,95 @@ export function initGuardia({ sb, subtabs } = {}) {
   const p2Elementos = document.getElementById("p2Elementos");
   const p2Cartuchos = document.getElementById("p2Cartuchos");
 
-  let guardiaState = state.guardiaState;
+  let guardiaState = state?.guardia || null;
 
-  function renderGuardiaPreview() {
-    if (preGuardia) preGuardia.textContent = JSON.stringify(guardiaState || {}, null, 2);
-    if (guardiaEstadoTxt) guardiaEstadoTxt.textContent = `Última actualización: ${guardiaState.updated_at_ts || "—"}`;
+  function setEstado(s) {
+    const el = elEstadoTxt();
+    if (el) el.textContent = s || "";
   }
 
-  function aplicarStateAGuardiaUI() {
-    const p1 = guardiaState?.patrullas?.p1 || {};
-    const p2 = guardiaState?.patrullas?.p2 || {};
+  function renderGuardiaPreview() {
+    const pre = elPreview();
+    if (pre) pre.textContent = JSON.stringify(guardiaState || {}, null, 2);
+  }
 
-    if (p1Lugar) p1Lugar.value = p1.lugar || "";
-    if (p1Obs) p1Obs.value = p1.obs || "";
-    if (p2Lugar) p2Lugar.value = p2.lugar || "";
-    if (p2Obs) p2Obs.value = p2.obs || "";
-
-    (p1Personal?.querySelectorAll('input[type="checkbox"]') || []).forEach((x) => {
-      x.checked = Array.isArray(p1.personal_ids) && p1.personal_ids.includes(x.value);
-    });
-    (p2Personal?.querySelectorAll('input[type="checkbox"]') || []).forEach((x) => {
-      x.checked = Array.isArray(p2.personal_ids) && p2.personal_ids.includes(x.value);
-    });
-
-    function applyMov(container, movArr) {
-      if (!container) return;
-      const byId = new Map((movArr || []).map((m) => [String(m.movil_id), m]));
-      container.querySelectorAll('input[data-movil-pick="1"]').forEach((chk) => {
-        const id = chk.getAttribute("data-movil-id");
-        const m = byId.get(String(id));
-        chk.checked = !!m;
-
-        chk.dispatchEvent(new Event("change"));
-
-        if (m) {
-          const libro = container.querySelector(`input[data-movil-flag="libro"][data-movil-id="${CSS.escape(id)}"]`);
-          const llave = container.querySelector(`input[data-movil-flag="llave"][data-movil-id="${CSS.escape(id)}"]`);
-          const tvf = container.querySelector(`input[data-movil-flag="tvf"][data-movil-id="${CSS.escape(id)}"]`);
-          if (libro) libro.checked = !!m.libro;
-          if (llave) llave.checked = !!m.llave;
-          if (tvf) tvf.checked = !!m.tvf;
-        }
-      });
-    }
-
-    applyMov(p1Moviles, p1.moviles);
-    applyMov(p2Moviles, p2.moviles);
-
-    function applyElems(container, ids) {
-      if (!container) return;
-      container.querySelectorAll('input[type="checkbox"]').forEach((chk) => {
-        if (!chk.value) return;
-        chk.checked = Array.isArray(ids) && ids.includes(chk.value);
-      });
-    }
-
-    applyElems(p1Elementos, p1.elementos_ids);
-    applyElems(p2Elementos, p2.elementos_ids);
-
-    function applyCart(container, map) {
-      if (!container) return;
-      const m = map || {};
-      container.querySelectorAll('input[data-cartucho-pick="1"]').forEach((chk) => {
-        const id = chk.getAttribute("data-cartucho-id");
-        const qtyEl = container.querySelector(`input[data-cartucho-qty="1"][data-cartucho-id="${CSS.escape(id)}"]`);
-        const has = Object.prototype.hasOwnProperty.call(m, id);
-        chk.checked = has;
-        chk.dispatchEvent(new Event("change"));
-        if (qtyEl && has) qtyEl.value = String(m[id] ?? 0);
-      });
-    }
-
-    applyCart(p1Cartuchos, p1.cartuchos_map);
-    applyCart(p2Cartuchos, p2.cartuchos_map);
-
-    aplicarReglaCartuchos(p1Elementos, p1Cartuchos, p1.elementos_ids);
-    aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2.elementos_ids);
-
-    renderGuardiaPreview();
-
-    if (subtabs) {
-      subtabs.boot();
-      subtabs.apply();
-    }
+  function fillSelectOptions(selectEl, opts, currentVal = "") {
+    if (!selectEl) return;
+    const val = currentVal || "";
+    selectEl.innerHTML =
+      `<option value="">Seleccionar</option>` +
+      opts.map((o) => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
+    if (val) selectEl.value = val;
   }
 
   function renderGuardiaDesdeInventario() {
-    const personal = invActivos("personal");
-    const moviles = invActivos("movil");
-    const elementos = invActivos("elemento");
+    const lugares = getLugaresSmart();
+    fillSelectOptions(p1Lugar, lugares, guardiaState?.patrullas?.p1?.lugar || "");
+    fillSelectOptions(p2Lugar, lugares, guardiaState?.patrullas?.p2?.lugar || "");
 
-    chipsCheckbox(p1Personal, personal, { prefix: "p1_per" });
-    chipsCheckbox(p2Personal, personal, { prefix: "p2_per" });
+    const pers = invActivos("personal");
+    const movs = invActivos("movil");
+    const elems = invActivos("elemento");
 
-    renderMoviles(p1Moviles, moviles, { prefix: "p1" });
-    renderMoviles(p2Moviles, moviles, { prefix: "p2" });
+    const p1 = guardiaState?.patrullas?.p1 || {};
+    const p2 = guardiaState?.patrullas?.p2 || {};
 
-    const elementosNoCart = elementos.filter((e) => !isSubgrupo(e, "Cartuchos"));
-    renderElementos(p1Elementos, elementosNoCart, { prefix: "p1_el" });
-    renderElementos(p2Elementos, elementosNoCart, { prefix: "p2_el" });
+    renderChips(p1Personal, pers, p1.personal_ids || []);
+    renderChips(p2Personal, pers, p2.personal_ids || []);
 
-    const cartuchos = elementos.filter((e) => isSubgrupo(e, "Cartuchos"));
-    renderCartuchos(p1Cartuchos, cartuchos, { prefix: "p1" });
-    renderCartuchos(p2Cartuchos, cartuchos, { prefix: "p2" });
+    renderMoviles(p1Moviles, movs, p1.moviles || []);
+    renderMoviles(p2Moviles, movs, p2.moviles || []);
 
-    aplicarStateAGuardiaUI();
+    const p1Elems = p1.elementos_ids || [];
+    const p2Elems = p2.elementos_ids || [];
 
-    if (subtabs) {
-      subtabs.boot();
-      subtabs.apply();
-    }
+    const groups1 = groupElementosBySubgrupo(elems.map((x) => x.value));
+    const groups2 = groups1;
+
+    const renderElementosGrouped = (container, checked, groups) => {
+      if (!container) return;
+      container.innerHTML = "";
+      groups.forEach(([label, vals]) => {
+        const h = document.createElement("div");
+        h.className = "subhead";
+        h.textContent = label;
+        container.appendChild(h);
+
+        const row = document.createElement("div");
+        row.className = "chip-grid";
+
+        const items = vals.map((v) => {
+          const it = elems.find((x) => x.value === v);
+          return it || { label: v, value: v };
+        });
+        renderChips(row, items, checked);
+        container.appendChild(row);
+      });
+    };
+
+    renderElementosGrouped(p1Elementos, p1Elems, groups1);
+    renderElementosGrouped(p2Elementos, p2Elems, groups2);
+
+    renderCartuchos(p1Cartuchos, p1.cartuchos_map || {});
+    renderCartuchos(p2Cartuchos, p2.cartuchos_map || {});
+
+    aplicarReglaCartuchos(p1Elementos, p1Cartuchos, p1Elems);
+    aplicarReglaCartuchos(p2Elementos, p2Cartuchos, p2Elems);
+
+    if (p1Obs) p1Obs.value = p1.obs || "";
+    if (p2Obs) p2Obs.value = p2.obs || "";
   }
 
-  function buildStateFromUI({ touchUpdatedAt = true } = {}) {
+  function aplicarStateAGuardiaUI() {
+    guardiaState = state?.guardia || guardiaState || null;
+    renderGuardiaDesdeInventario();
+    renderGuardiaPreview();
+
+    const logLen = Array.isArray(guardiaState?.log) ? guardiaState.log.length : 0;
+    setEstado(logLen ? `OK · Logs: ${logLen}` : "OK");
+  }
+
+  function buildStateFromUI() {
     const p1PersonalIds = readCheckedValues(p1Personal);
     const p2PersonalIds = readCheckedValues(p2Personal);
 
@@ -492,8 +608,9 @@ export function initGuardia({ sb, subtabs } = {}) {
 
     const next = cloneDeep(guardiaState || {});
     next.version = 1;
-    if (touchUpdatedAt) next.updated_at_ts = isoNow();
-next.patrullas = next.patrullas || {};
+    next.updated_at_ts = isoNow();
+
+    next.patrullas = next.patrullas || {};
     next.patrullas.p1 = next.patrullas.p1 || {};
     next.patrullas.p2 = next.patrullas.p2 || {};
 
@@ -516,79 +633,147 @@ next.patrullas = next.patrullas || {};
 
   async function cargarGuardiaDesdeServidor() {
     const session = await getSessionOrNull(sb);
-    const headers = {
-      apikey: SUPABASE_ANON_KEY,
-      Accept: "application/json",
-    };
-    if (session?.access_token) headers.Authorization = "Bearer " + session.access_token;
+    if (!session) return null;
 
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/guardia_estado?select=payload&id=eq.1&limit=1`, { headers });
+    const url = `${SUPABASE_URL}/rest/v1/guardia_estado?id=eq.1&select=payload`;
+    const resp = await fetch(url, {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: "Bearer " + session.access_token,
+        Accept: "application/json",
+      },
+    });
 
-    if (!r.ok) {
-      const txt = await r.text();
-      console.warn("[ADMIN] No se pudo leer guardia_estado:", r.status, txt);
-      renderGuardiaPreview();
-      return;
-    }
-
-    const data = await r.json();
-    const payload = data?.[0]?.payload || null;
-
-    if (payload && typeof payload === "object") {
-      setGuardiaState(payload);
-      guardiaState = state.guardiaState;
-    }
-
-    aplicarStateAGuardiaUI();
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const payload = data?.[0]?.payload;
+    return payload && typeof payload === "object" ? payload : null;
   }
 
   async function guardarGuardiaEnServidor(nextPayload) {
     const session = await getSessionOrNull(sb);
     if (!session) {
-      alert("No hay sesión iniciada. Inicie sesión antes de guardar Guardia.");
+      alert("No hay sesión activa. Volvé a iniciar sesión.");
       return false;
     }
 
     const res = await patchOrInsertStore({ table: "guardia_estado", payload: nextPayload, session });
     if (!res.ok) {
       console.error("[ADMIN] Error guardando guardia_estado:", res.status, res.text);
-      alert("Error guardando Guardia. Mirá Console (F12). Status: " + res.status);
+      alert("Error guardando Guardia. Mirá Console (F12).");
       return false;
     }
 
-    const p = res.data?.[0]?.payload ?? res.data?.payload ?? null;
-    setGuardiaState(p && typeof p === "object" ? p : nextPayload);
-    guardiaState = state.guardiaState;
-
+    setGuardiaState(nextPayload);
+    guardiaState = nextPayload;
     renderGuardiaPreview();
     return true;
   }
 
-
-  // ✅ Actualiza SOLO datos de recursos (personal/móviles/elementos/lugar/obs/cartuchos)
-  // sin tocar timestamps/logs de acciones (Ingreso/Retiro/Presente/Franco/Constancia).
-  async function onActualizarDatos() {
-    const next = buildStateFromUI({ touchUpdatedAt: false });
-    await guardarGuardiaEnServidor(next);
-    aplicarStateAGuardiaUI();
-    setEstado("Datos actualizados (sin cambiar horario)");
-  }
-
   async function onGuardarGuardia() {
     const next = buildStateFromUI();
-    const ok = await guardarGuardiaEnServidor(next);
-    if (ok) alert("Guardia guardada (defaults publicados).");
+    await guardarGuardiaEnServidor(next);
+    aplicarStateAGuardiaUI();
   }
 
-  async function onActualizarGuardia({ invLoad } = {}) {
-    if (typeof invLoad === "function") await invLoad();
-    cargarLugaresParaGuardia({ p1Lugar, p2Lugar });
-    await cargarGuardiaDesdeServidor();
+    // ======================================================
+  // ✅ Actualizar datos (sin tocar timestamps de acciones)
+  // - Guarda cambios de Lugar/Obs/Personal/Moviles/Elementos/Cartuchos
+  // - NO modifica estado/estado_ts de cada patrulla
+  // - NO agrega logs nuevos, y mantiene hora/ts originales
+  // - Opcional: actualiza el snapshot + resumen del ÚLTIMO log de cada patrulla
+  // ======================================================
+  function actualizarResumenYSnapshotEnUltimoLog(next, pKey) {
+    const up = String(pKey || "").toUpperCase();
+    if (!Array.isArray(next?.log)) return;
 
-    if (subtabs) {
-      subtabs.boot();
-      subtabs.apply();
+    const idx = next.log.findIndex((e) => String(e?.patrulla || "").toUpperCase() === up);
+    if (idx === -1) return;
+
+    const pat = next?.patrullas?.[pKey] || {};
+    const perTxt = (pat.personal_ids || []).map((id) => invLabelFromValue("personal", id)).join(", ");
+    const movTxt = (pat.moviles || []).map((m) => invLabelFromValue("movil", m.movil_id)).join(", ");
+    const elemTxt = (pat.elementos_ids || []).map((id) => invLabelFromValue("elemento", id)).join(", ");
+    const resumen = `Personal: ${perTxt || "-"} | Movil(es): ${movTxt || "-"} | Elementos: ${elemTxt || "-"}`;
+
+    const e = next.log[idx] || {};
+    e.resumen = resumen;
+
+    e.snapshot = e.snapshot || {};
+    e.snapshot.lugar = pat.lugar || "";
+    e.snapshot.obs = pat.obs || "";
+    e.snapshot.personal_ids = Array.isArray(pat.personal_ids) ? [...pat.personal_ids] : [];
+    e.snapshot.moviles = Array.isArray(pat.moviles) ? cloneDeep(pat.moviles) : [];
+    e.snapshot.elementos_ids = Array.isArray(pat.elementos_ids) ? [...pat.elementos_ids] : [];
+    e.snapshot.cartuchos_map = pat.cartuchos_map ? cloneDeep(pat.cartuchos_map) : {};
+    e.snapshot.cartuchos_qty_map = pat.cartuchos_qty_map ? cloneDeep(pat.cartuchos_qty_map) : {};
+  }
+
+  async function onActualizarDatosGuardia() {
+    // Partimos del estado ACTUAL (con timestamps/logs originales)
+    const base = cloneDeep(guardiaState || {});
+    const ui = buildStateFromUI();
+
+    base.patrullas = base.patrullas || {};
+    base.patrullas.p1 = base.patrullas.p1 || {};
+    base.patrullas.p2 = base.patrullas.p2 || {};
+
+    // preservar estado/estado_ts (no tocar)
+    const p1Estado = { estado: base.patrullas.p1.estado, estado_ts: base.patrullas.p1.estado_ts };
+    const p2Estado = { estado: base.patrullas.p2.estado, estado_ts: base.patrullas.p2.estado_ts };
+
+    // copiar SOLO datos editables desde UI
+    base.patrullas.p1.lugar = ui.patrullas?.p1?.lugar || "";
+    base.patrullas.p1.obs = ui.patrullas?.p1?.obs || "";
+    base.patrullas.p1.personal_ids = ui.patrullas?.p1?.personal_ids || [];
+    base.patrullas.p1.moviles = ui.patrullas?.p1?.moviles || [];
+    base.patrullas.p1.elementos_ids = ui.patrullas?.p1?.elementos_ids || [];
+    base.patrullas.p1.cartuchos_map = ui.patrullas?.p1?.cartuchos_map || {};
+    base.patrullas.p1.cartuchos_qty_map = ui.patrullas?.p1?.cartuchos_qty_map || {};
+
+    base.patrullas.p2.lugar = ui.patrullas?.p2?.lugar || "";
+    base.patrullas.p2.obs = ui.patrullas?.p2?.obs || "";
+    base.patrullas.p2.personal_ids = ui.patrullas?.p2?.personal_ids || [];
+    base.patrullas.p2.moviles = ui.patrullas?.p2?.moviles || [];
+    base.patrullas.p2.elementos_ids = ui.patrullas?.p2?.elementos_ids || [];
+    base.patrullas.p2.cartuchos_map = ui.patrullas?.p2?.cartuchos_map || {};
+    base.patrullas.p2.cartuchos_qty_map = ui.patrullas?.p2?.cartuchos_qty_map || {};
+
+    // restaurar estado/estado_ts
+    base.patrullas.p1.estado = p1Estado.estado;
+    base.patrullas.p1.estado_ts = p1Estado.estado_ts;
+    base.patrullas.p2.estado = p2Estado.estado;
+    base.patrullas.p2.estado_ts = p2Estado.estado_ts;
+
+    // mantener log tal cual, pero actualizar snapshot/resumen del último log por patrulla
+    base.log = Array.isArray(base.log) ? base.log : [];
+    actualizarResumenYSnapshotEnUltimoLog(base, "p1");
+    actualizarResumenYSnapshotEnUltimoLog(base, "p2");
+
+    base.updated_at_ts = isoNow();
+
+    await guardarGuardiaEnServidor(base);
+    aplicarStateAGuardiaUI();
+    setEstado("Datos actualizados (sin cambiar horarios)");
+  }
+
+async function onActualizarGuardia({ invLoad } = {}) {
+    const payload = await cargarGuardiaDesdeServidor();
+    if (payload) setGuardiaState(payload);
+    guardiaState = state?.guardia || payload || guardiaState;
+    renderGuardiaDesdeInventario();
+    renderGuardiaPreview();
+    setEstado(payload ? "Actualizado" : "Sin datos");
+
+    if (typeof invLoad === "function") {
+      try {
+        await invLoad();
+      } catch {}
     }
+  }
+
+  function refreshLugares() {
+    renderGuardiaDesdeInventario();
   }
 
   function bindAccionesEstado() {
@@ -615,7 +800,21 @@ next.patrullas = next.patrullas || {};
         const resumen = `Personal: ${perTxt || "-"} | Movil(es): ${movTxt || "-"} | Elementos: ${elemTxt || "-"}`;
 
         next.log = Array.isArray(next.log) ? next.log : [];
-        next.log.unshift({ patrulla: String(p).toUpperCase(), accion, hora, ts, resumen });
+        next.log.unshift({
+          patrulla: String(p).toUpperCase(),
+          accion,
+          hora,
+          ts,
+          resumen,
+          snapshot: {
+            lugar: pat.lugar || "",
+            obs: pat.obs || "",
+            personal_ids: Array.isArray(pat.personal_ids) ? [...pat.personal_ids] : [],
+            moviles: Array.isArray(pat.moviles) ? cloneDeep(pat.moviles) : [],
+            elementos_ids: Array.isArray(pat.elementos_ids) ? [...pat.elementos_ids] : [],
+            cartuchos_map: pat.cartuchos_map ? cloneDeep(pat.cartuchos_map) : {},
+          },
+        });
 
         await guardarGuardiaEnServidor(next);
         aplicarStateAGuardiaUI();
@@ -632,40 +831,78 @@ next.patrullas = next.patrullas || {};
     hook(p2Elementos, p2Cartuchos);
   }
 
+  function bindRefrescoPorGuardarOrden() {
+    const btnGuardarOrden =
+      document.querySelector('button[onclick*="agregarOrden"]') ||
+      document.getElementById("btnGuardarOrden") ||
+      null;
+
+    if (btnGuardarOrden) {
+      btnGuardarOrden.addEventListener("click", () => {
+        setTimeout(() => {
+          refreshLugares();
+          renderGuardiaPreview();
+          setEstado("Lugares actualizados (guardar orden)");
+        }, 50);
+      });
+    }
+
+    if (typeof window !== "undefined" && typeof window.agregarOrden === "function") {
+      if (!window.__guardia_hook_agregarOrden) {
+        window.__guardia_hook_agregarOrden = true;
+
+        const original = window.agregarOrden;
+        window.agregarOrden = function (...args) {
+          const ret = original.apply(this, args);
+
+          setTimeout(() => {
+            refreshLugares();
+            renderGuardiaPreview();
+            setEstado("Lugares actualizados (guardar orden)");
+          }, 50);
+
+          return ret;
+        };
+      }
+    }
+
+    const franjasEl = document.getElementById("franjas");
+    if (franjasEl) {
+      franjasEl.addEventListener("input", () => {
+        refreshLugares();
+      });
+    }
+  }
+
   function bind() {
     if (btnGuardiaGuardar) btnGuardiaGuardar.addEventListener("click", () => onGuardarGuardia().catch(console.error));
     if (btnGuardiaActualizar) {
       btnGuardiaActualizar.addEventListener("click", () => onActualizarGuardia({ invLoad: null }).catch(console.error));
     }
+    if (btnGuardiaActualizarDatos) {
+      btnGuardiaActualizarDatos.addEventListener("click", () => onActualizarDatosGuardia().catch(console.error));
+    }
 
     bindAccionesEstado();
     bindReglaCartuchosLive();
+    bindRefrescoPorGuardarOrden();
 
-    // Re-render UI cuando cambia inventario
     subscribeInventario(() => {
-      // mantiene lugares y re-render de chips
       renderGuardiaDesdeInventario();
       renderGuardiaPreview();
     });
   }
 
   async function init({ invLoad } = {}) {
-    cargarLugaresParaGuardia({ p1Lugar, p2Lugar });
+    try {
+      if (subtabs?.boot) subtabs.boot();
+    } catch {}
+
+    await onActualizarGuardia({ invLoad });
     renderGuardiaDesdeInventario();
-    await cargarGuardiaDesdeServidor();
     renderGuardiaPreview();
-
-    // Parchar handler de actualizar para que use invLoad real
-    if (btnGuardiaActualizar) {
-      btnGuardiaActualizar.onclick = null;
-      btnGuardiaActualizar.addEventListener("click", () => onActualizarGuardia({ invLoad }).catch(console.error));
-    }
-
-    if (subtabs) {
-      subtabs.boot();
-      subtabs.apply();
-    }
+    setEstado("OK");
   }
 
-  return { bind, init, cargarLugaresParaGuardia: () => cargarLugaresParaGuardia({ p1Lugar, p2Lugar }), cargarGuardiaDesdeServidor };
+  return { bind, init, refreshLugares };
 }
