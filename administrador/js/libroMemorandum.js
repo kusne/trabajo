@@ -2,14 +2,13 @@
 // Tabla: public.libro_memorandum_store (id int PK, payload jsonb, updated_at timestamptz)
 // Guarda un único JSON (id=1).
 //
-// ✅ Cambios pedidos:
+// ✅ Cambios:
 // 1) Hora visible pero NO editable: se setea sola con la hora del sistema cuando apretás "Agregar".
-// 2) Importación automática de NOVEDADES desde Guardia, pero SOLO cuando abrís la solapa "Libro memorándum":
-//    - Lee guardia_estado.id=1
-//    - Toma logs (Ingreso/Retiro/Presente/Franco/Constancia/Novedad, etc.)
-//    - Genera asientos en Libro Memorándum SOLO por novedades nuevas (dedupe por key estable)
-//    - Si un móvil tiene tildes Libro/TVF, se reflejan en el texto.
-// 3) Importa solo si hay cambios nuevos (dedupe por key estable).
+// 2) Importación automática desde Guardia al abrir la solapa "Libro memorándum":
+//    - Lee guardia_estado.id=1 (payload.log)
+//    - Importa TODAS las acciones (Ingreso/Retiro/Presente/Franco/Constancia/Novedad)
+//    - Deduplica por key estable
+//    - Si un móvil tiene tildes Libro/TVF, se reflejan en el texto del asiento.
 
 import { invLabelFromValue } from "./inventario.js";
 
@@ -19,7 +18,7 @@ const ROW_ID = 1;
 const GUARDIA_TABLE = "guardia_estado";
 const GUARDIA_ROW_ID = 1;
 
-export function initLibroMemorandum({ sb }) {
+export function initLibroMemorandum({ sb } = {}) {
   // ===== DOM getters (no rompen si el tab no existe) =====
   const elCausa = () => document.getElementById("memoCausa");
   const elHora = () => document.getElementById("memoHora");
@@ -31,21 +30,23 @@ export function initLibroMemorandum({ sb }) {
   const btnAgregar = () => document.getElementById("btnLibroAgregar");
   const btnLimpiar = () => document.getElementById("btnLibroLimpiar");
 
+  // Botón pestaña "Libro memorándum" (gatillo de import)
+  const btnTabLibro = () => document.querySelector('.tab-btn[data-tab="libro"]');
+  const panelLibro = () => document.getElementById("tab-libro");
+
   // payload persistido:
   // {
   //   entries: [{id, ts, user, causa, hora, novedad, meta?}],
   //   imported: { guardia_log_keys: [] }
   // }
-  // Compat: si existía imported.guardia_retiro_ids (versiones anteriores), se migra a guardia_log_keys.
   let state = { entries: [], imported: { guardia_log_keys: [] } };
-  let importErrorShown = false;
+  let isLoaded = false;
 
   function nowIso() {
     return new Date().toISOString();
   }
 
   function hhmmArNow() {
-    // Argentina / Córdoba (-03). Evita depender de utils.js.
     try {
       const s = new Intl.DateTimeFormat("es-AR", {
         timeZone: "America/Argentina/Cordoba",
@@ -84,18 +85,7 @@ export function initLibroMemorandum({ sb }) {
     if (!state || typeof state !== "object") state = {};
     if (!Array.isArray(state.entries)) state.entries = [];
     if (!state.imported || typeof state.imported !== "object") state.imported = {};
-    // ✅ Nuevo esquema: guardia_log_keys (dedupe de cualquier acción)
     if (!Array.isArray(state.imported.guardia_log_keys)) state.imported.guardia_log_keys = [];
-
-    // ✅ Compat hacia atrás: si existía guardia_retiro_ids, lo migramos una sola vez
-    if (Array.isArray(state.imported.guardia_retiro_ids) && state.imported.guardia_retiro_ids.length) {
-      const merged = new Set([
-        ...state.imported.guardia_log_keys.map(String),
-        ...state.imported.guardia_retiro_ids.map(String),
-      ]);
-      state.imported.guardia_log_keys = Array.from(merged);
-      delete state.imported.guardia_retiro_ids;
-    }
   }
 
   function setPreview() {
@@ -131,7 +121,7 @@ export function initLibroMemorandum({ sb }) {
         <td>${causa}</td>
         <td>${hora}</td>
         <td>
-          <div>${novedad}</div>
+          <div style="white-space:pre-wrap;">${novedad}</div>
           ${e?.user ? `<div class="muted" style="margin-top:6px;font-size:12px;">${escapeHtml(e.user)}</div>` : ""}
         </td>
         <td><button type="button" class="btn-danger" data-del="${id}">Borrar</button></td>
@@ -156,17 +146,22 @@ export function initLibroMemorandum({ sb }) {
   }
 
   async function loadFromServer() {
+    if (!sb) throw new Error("Libro Memorándum: falta sb (Supabase client).");
+
     const { data, error } = await sb.from(TABLE).select("payload").eq("id", ROW_ID).limit(1);
 
     if (error) {
       console.warn("[LIBRO] load error:", error);
       state = { entries: [], imported: { guardia_log_keys: [] } };
+      ensureStateShape();
+      isLoaded = true;
       return;
     }
 
     const payload = data?.[0]?.payload;
     state = payload && typeof payload === "object" ? payload : { entries: [], imported: { guardia_log_keys: [] } };
     ensureStateShape();
+    isLoaded = true;
   }
 
   async function saveToServer() {
@@ -186,9 +181,6 @@ export function initLibroMemorandum({ sb }) {
     const h = elHora();
     if (!h) return;
 
-    // Bloqueo real (visible):
-    // - readonly evita edición
-    // - bloqueo de teclado/pegar para que no cambie “ni de casualidad”
     h.readOnly = true;
     h.setAttribute("readonly", "");
     h.setAttribute("inputmode", "none");
@@ -204,32 +196,29 @@ export function initLibroMemorandum({ sb }) {
     h.addEventListener("cut", hardBlock);
     h.addEventListener("drop", hardBlock);
 
-    // siempre mostramos algo
     if (!String(h.value || "").trim()) h.value = hhmmArNow();
   }
 
   function limpiarForm({ keepHora = true } = {}) {
     if (elCausa()) elCausa().value = "";
     if (elNovedad()) elNovedad().value = "";
-
-    if (elHora()) {
-      elHora().value = keepHora ? hhmmArNow() : "";
-    }
+    if (elHora()) elHora().value = keepHora ? hhmmArNow() : "";
   }
 
-  // ===== IMPORT RETIROS DESDE GUARDIA =====
-
-  function normalizeAccion(accion) {
-    return String(accion || "").trim();
-  }
-
-  // Importamos cualquier acción no vacía (Ingreso/Retiro/Presente/Franco/Constancia/Novedad, etc.)
-  function isImportableAccion(accion) {
-    return normalizeAccion(accion).length > 0;
-  }
+  // ===== IMPORT LOGS DESDE GUARDIA =====
 
   function safeArr(x) {
     return Array.isArray(x) ? x : [];
+  }
+
+  function guardiaLogKey(l) {
+    const ts = String(l?.ts || "").trim();
+    if (ts) return ts;
+    const hora = String(l?.hora || "").trim();
+    const patrulla = String(l?.patrulla || "").trim();
+    const accion = String(l?.accion || "").trim();
+    const resumen = String(l?.resumen || "").trim();
+    return `${hora}|${patrulla}|${accion}|${resumen}`.trim();
   }
 
   function fmtMovil(m) {
@@ -247,13 +236,8 @@ export function initLibroMemorandum({ sb }) {
     return `${label}${flagsTxt}${obsTxt}`.trim();
   }
 
-  function fmtPersonal(ids) {
-    const list = safeArr(ids).map((id) => invLabelFromValue("personal", id)).filter(Boolean);
-    return list.length ? list.join(", ") : "-";
-  }
-
-  function fmtElementos(ids) {
-    const list = safeArr(ids).map((id) => invLabelFromValue("elemento", id)).filter(Boolean);
+  function fmtList(tipo, ids) {
+    const list = safeArr(ids).map((id) => invLabelFromValue(tipo, id)).filter(Boolean);
     return list.length ? list.join(", ") : "-";
   }
 
@@ -263,79 +247,75 @@ export function initLibroMemorandum({ sb }) {
   }
 
   function fmtCartuchosQty(map) {
-    const m = map && typeof map === "object" && !Array.isArray(map) ? map : {};
-    const parts = [];
-    // keys esperadas: at_12_70, pg_12_70
-    if (m.at_12_70 !== undefined) parts.push(`AT 12/70: ${m.at_12_70}`);
-    if (m.pg_12_70 !== undefined) parts.push(`PG 12/70: ${m.pg_12_70}`);
-    return parts.length ? parts.join(" | ") : "";
+    if (!map || typeof map !== "object") return "";
+    const pairs = Object.entries(map)
+      .map(([k, v]) => [String(k), Math.max(0, parseInt(v, 10) || 0)])
+      .filter(([, n]) => n > 0);
+
+    if (!pairs.length) return "";
+
+    const label = (k) => {
+      if (k === "at_12_70") return "AT 12/70";
+      if (k === "pg_12_70") return "PG 12/70";
+      return k;
+    };
+
+    return pairs.map(([k, n]) => `${label(k)}: ${n}`).join(" · ");
   }
 
   function buildNovedadFromLog(log) {
-    const accion = normalizeAccion(log?.accion) || "Acción";
+    const accion = String(log?.accion || "").trim() || "Novedad";
     const p = String(log?.patrulla || "").trim();
     const snap = log?.snapshot || {};
 
     const lugar = String(snap?.lugar || "").trim() || "-";
     const obs = String(snap?.obs || "").trim();
 
-    const personal = fmtPersonal(snap?.personal_ids);
+    const personal = fmtList("personal", snap?.personal_ids);
     const moviles = fmtMoviles(snap?.moviles);
-    const elementos = fmtElementos(snap?.elementos_ids);
+    const elementos = fmtList("elemento", snap?.elementos_ids);
+
+    const cartTxt = fmtCartuchosQty(snap?.cartuchos_qty_map);
+    const cartLine = cartTxt ? `
+Cartuchos: ${cartTxt}` : "";
 
     const obsTxt = obs ? ` · Obs: ${obs}` : "";
-    const cartTxt = fmtCartuchosQty(snap?.cartuchos_qty_map);
-    const cartLine = cartTxt ? `\nCartuchos: ${cartTxt}` : "";
 
-    // 🔥 acá impactan Libro/TVF porque fmtMovil los agrega.
-    return `${accion.toUpperCase()}${p ? " " + p : ""} · Lugar: ${lugar}${obsTxt}\nPersonal: ${personal}\nMóviles: ${moviles}\nElementos: ${elementos}${cartLine}`;
+    return `${accion}${p ? " " + p : ""} · Lugar: ${lugar}${obsTxt}
+Personal: ${personal}
+Móviles: ${moviles}
+Elementos: ${elementos}${cartLine}`;
   }
 
   async function loadGuardiaPayload() {
-    // ✅ Asegurar sesión (si RLS está activo, sin sesión no se puede leer)
-    try {
-      const { data: sdata } = await sb.auth.getSession();
-      if (!sdata?.session) {
-        throw new Error("Sin sesión activa (no se puede importar desde Guardia)");
-      }
-    } catch (e) {
-      // re-lanzamos para que el import muestre el problema
-      throw e;
-    }
-
     const { data, error } = await sb.from(GUARDIA_TABLE).select("payload").eq("id", GUARDIA_ROW_ID).limit(1);
     if (error) throw error;
     const payload = data?.[0]?.payload;
     return payload && typeof payload === "object" ? payload : null;
   }
 
-  // ✅ Devuelve true si importó algo nuevo; false si no había novedades
   async function importLogsFromGuardiaIfNeeded() {
     try {
       ensureStateShape();
 
       const guardia = await loadGuardiaPayload();
       const logs = safeArr(guardia?.log);
-
       if (!logs.length) return false;
 
       const imported = new Set(state.imported.guardia_log_keys.map(String));
       const nuevos = [];
 
       logs.forEach((l) => {
-        const accionRaw = normalizeAccion(l?.accion);
-        if (!isImportableAccion(accionRaw)) return;
-
-        // key estable (preferimos ts; fallback a hora+patrulla+accion+resumen)
-        const key = String(l?.ts || `${l?.hora || ""}|${l?.patrulla || ""}|${accionRaw}|${l?.resumen || ""}`).trim();
+        const key = guardiaLogKey(l);
         if (!key) return;
         if (imported.has(key)) return;
 
         const hora = String(l?.hora || "").trim() || hhmmArNow();
-        const causa = `${accionRaw}${l?.patrulla ? " " + String(l.patrulla).trim() : ""}`.trim();
+        const accion = String(l?.accion || "").trim() || "Novedad";
+        const causa = `${accion}${l?.patrulla ? " " + String(l.patrulla).trim() : ""}`.trim();
         const novedad = buildNovedadFromLog(l);
 
-        nuevos.push({ key, hora, causa, novedad, accion: accionRaw });
+        nuevos.push({ key, hora, causa, novedad });
       });
 
       if (!nuevos.length) return false;
@@ -352,7 +332,6 @@ export function initLibroMemorandum({ sb }) {
         novedad: x.novedad,
         meta: {
           source: "guardia",
-          tipo: String(x.accion || "").trim().toLowerCase(),
           guardia_key: x.key,
         },
       }));
@@ -364,77 +343,27 @@ export function initLibroMemorandum({ sb }) {
       await saveToServer();
       return true;
     } catch (e) {
-      console.error("[LIBRO] importLogsFromGuardiaIfNeeded error:", e);
-      // ✅ No tragarse el error en silencio: avisamos una sola vez para no molestar.
-      if (!importErrorShown) {
-        importErrorShown = true;
-        const msg = String(e?.message || e || "").trim();
-        alert(
-          "No pude importar desde Guardia.\n\n" +
-            (msg ? `Motivo: ${msg}\n\n` : "") +
-            "Abrí Console (F12) para ver el error completo."
-        );
-      }
+      console.warn("[LIBRO] importLogsFromGuardiaIfNeeded error:", e);
       return false;
     }
   }
 
-  // ✅ Gatillo: cuando el usuario entra a la solapa Libro Memorándum
-  function bindImportOnTabOpen() {
-    // Botón tab (tu HTML: <button class="tab-btn" data-tab="libro">Libro memorándum</button>)
-    const tabBtn = document.querySelector('.tab-btn[data-tab="libro"]');
+  async function ensureLoaded() {
+    if (!isLoaded) await loadFromServer();
+    ensureStateShape();
+  }
 
-    // Panel (por si algún día cambias tabs.js)
-    const tabPanel = document.getElementById("tab-libro");
-
-    const handler = async () => {
-      // Importa SOLO novedades (dedupe por imported.guardia_log_keys)
-      const changed = await importLogsFromGuardiaIfNeeded();
-
-      // Si no hubo cambios, igual renderizamos (por si el usuario borró asientos, etc.)
-      render();
-
-      // Mantener hora visible siempre
-      bloquearHora();
-
-      // (Opcional) podés mostrar un estado, pero no alertamos para no molestar.
-      // console.log("[LIBRO] import trigger, changed:", changed);
-      return changed;
-    };
-
-    if (tabBtn && !tabBtn.__libroImportBound) {
-      tabBtn.__libroImportBound = true;
-      tabBtn.addEventListener("click", () => handler().catch(() => {}));
-    }
-
-    // Fallback: si por algún motivo tabs.js no dispara click del botón,
-    // igual intentamos importar cuando el panel se vuelve visible (poll liviano).
-    if (tabPanel && !tabPanel.__libroVisWatcher) {
-      tabPanel.__libroVisWatcher = true;
-
-      let lastVisible = false;
-
-      const isVisible = () => {
-        // is-active o display != none
-        const active = tabPanel.classList.contains("is-active");
-        const styleOk = window.getComputedStyle(tabPanel).display !== "none";
-        return active || styleOk;
-      };
-
-      setInterval(() => {
-        const vis = isVisible();
-        if (vis && !lastVisible) {
-          handler().catch(() => {});
-        }
-        lastVisible = vis;
-      }, 600);
-    }
+  async function onTabLibroActivated() {
+    // Gatillo: cada vez que abrís la solapa Libro, intenta importar cambios.
+    await ensureLoaded();
+    bloquearHora();
+    const changed = await importLogsFromGuardiaIfNeeded();
+    if (!changed) render();
   }
 
   // ===== Acciones manuales del libro =====
 
   async function onAgregar() {
-    // Hora se fija SIEMPRE al presionar el botón
     const horaNow = hhmmArNow();
     if (elHora()) elHora().value = horaNow;
 
@@ -473,32 +402,41 @@ export function initLibroMemorandum({ sb }) {
       if (a) a.addEventListener("click", onAgregar);
       if (l) l.addEventListener("click", onLimpiar);
 
-      // Asegura que Hora quede bloqueada incluso si el tab se re-renderiza.
       bloquearHora();
 
-      // ✅ gatillo de importación al abrir solapa (sin tocar otros archivos)
-      bindImportOnTabOpen();
+      // ✅ Gatillo principal: click en la pestaña Libro memorándum
+      const tabBtn = btnTabLibro();
+      if (tabBtn && !tabBtn.__libro_hooked) {
+        tabBtn.__libro_hooked = true;
+        tabBtn.addEventListener("click", () => {
+          onTabLibroActivated().catch(console.warn);
+        });
+      }
+
+      // ✅ Fallback: si el tab se activa por código (sin click)
+      const panel = panelLibro();
+      if (panel && !panel.__libro_observer) {
+        panel.__libro_observer = true;
+        const obs = new MutationObserver(() => {
+          if (panel.classList.contains("is-active")) {
+            onTabLibroActivated().catch(console.warn);
+          }
+        });
+        obs.observe(panel, { attributes: true, attributeFilter: ["class"] });
+      }
     },
 
     async init() {
-      await loadFromServer();
-      ensureStateShape();
-
-      // NO importamos acá: el gatillo es entrar a la solapa "Libro memorándum"
+      await ensureLoaded();
       bloquearHora();
       render();
     },
 
-    // Por si después querés llamar esto manualmente desde otro lado.
-    async importLogsNow() {
+    async importGuardiaNow() {
+      await ensureLoaded();
       const changed = await importLogsFromGuardiaIfNeeded();
       render();
       return changed;
-    },
-
-    // Compat con versiones anteriores que llamaban a "importRetirosNow".
-    async importRetirosNow() {
-      return this.importLogsNow();
     },
   };
 }
