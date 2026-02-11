@@ -2,13 +2,13 @@
 // Tabla: public.libro_memorandum_store (id int PK, payload jsonb, updated_at timestamptz)
 // Guarda un único JSON (id=1).
 //
-// ✅ Cambios:
-// 1) Hora visible pero NO editable: se setea sola con la hora del sistema cuando apretás "Agregar".
-// 2) Importación automática desde Guardia al abrir la solapa "Libro memorándum":
-//    - Lee guardia_estado.id=1 (payload.log)
-//    - Importa TODAS las acciones (Ingreso/Retiro/Presente/Franco/Constancia/Novedad)
-//    - Deduplica por key estable
-//    - Si un móvil tiene tildes Libro/TVF, se reflejan en el texto del asiento.
+// Objetivo:
+// - Cuando entrás a la solapa "Libro memorándum", importar AUTOMÁTICAMENTE (solo nuevos) los logs de Guardia
+//   (Ingreso / Retiro / Presente / Franco / Constancia) y agregarlos como asientos.
+// - No tocar nada de Guardia: solo lee guardia_estado.id=1.
+// - Importa SOLO si hay logs nuevos (dedupe por key estable).
+//
+// Nota: no depende de modificar tabs.js ni administrador.js. Se engancha a los clicks de .tab-btn[data-tab="libro"].
 
 import { invLabelFromValue } from "./inventario.js";
 
@@ -18,29 +18,24 @@ const ROW_ID = 1;
 const GUARDIA_TABLE = "guardia_estado";
 const GUARDIA_ROW_ID = 1;
 
-export function initLibroMemorandum({ sb } = {}) {
-  // ===== DOM getters (no rompen si el tab no existe) =====
+export function initLibroMemorandum({ sb }) {
+  // ===== DOM getters =====
   const elCausa = () => document.getElementById("memoCausa");
   const elHora = () => document.getElementById("memoHora");
   const elNovedad = () => document.getElementById("memoNovedad");
-
   const tbody = () => document.getElementById("memoTbody");
   const elPreview = () => document.getElementById("libroJsonPreview");
-
   const btnAgregar = () => document.getElementById("btnLibroAgregar");
   const btnLimpiar = () => document.getElementById("btnLibroLimpiar");
-
-  // Botón pestaña "Libro memorándum" (gatillo de import)
-  const btnTabLibro = () => document.querySelector('.tab-btn[data-tab="libro"]');
-  const panelLibro = () => document.getElementById("tab-libro");
 
   // payload persistido:
   // {
   //   entries: [{id, ts, user, causa, hora, novedad, meta?}],
-  //   imported: { guardia_log_keys: [] }
+  //   imported: { guardia_log_ids: string[] }
   // }
-  let state = { entries: [], imported: { guardia_log_keys: [] } };
-  let isLoaded = false;
+  let state = { entries: [], imported: { guardia_log_ids: [] } };
+  let _loadedOnce = false;
+  let _importInFlight = null;
 
   function nowIso() {
     return new Date().toISOString();
@@ -85,7 +80,7 @@ export function initLibroMemorandum({ sb } = {}) {
     if (!state || typeof state !== "object") state = {};
     if (!Array.isArray(state.entries)) state.entries = [];
     if (!state.imported || typeof state.imported !== "object") state.imported = {};
-    if (!Array.isArray(state.imported.guardia_log_keys)) state.imported.guardia_log_keys = [];
+    if (!Array.isArray(state.imported.guardia_log_ids)) state.imported.guardia_log_ids = [];
   }
 
   function setPreview() {
@@ -94,15 +89,15 @@ export function initLibroMemorandum({ sb } = {}) {
   }
 
   function render() {
+    ensureStateShape();
     setPreview();
 
     const tb = tbody();
     if (!tb) return;
 
     const entries = Array.isArray(state?.entries) ? state.entries : [];
-
     if (!entries.length) {
-      tb.innerHTML = `<tr><td colspan="4" class="muted">Sin asientos todavía.</td></tr>`;
+      tb.innerHTML = `<tr><td colspan="3" class="muted">Sin asientos todavía.</td></tr>`;
       return;
     }
 
@@ -115,7 +110,6 @@ export function initLibroMemorandum({ sb } = {}) {
       const causa = escapeHtml(e?.causa || "");
       const hora = escapeHtml(e?.hora || "");
       const novedad = escapeHtml(e?.novedad || "");
-      const id = escapeHtml(e?.id || "");
 
       tr.innerHTML = `
         <td>${causa}</td>
@@ -124,44 +118,22 @@ export function initLibroMemorandum({ sb } = {}) {
           <div style="white-space:pre-wrap;">${novedad}</div>
           ${e?.user ? `<div class="muted" style="margin-top:6px;font-size:12px;">${escapeHtml(e.user)}</div>` : ""}
         </td>
-        <td><button type="button" class="btn-danger" data-del="${id}">Borrar</button></td>
       `;
       tb.appendChild(tr);
-    });
-
-    tb.querySelectorAll("button[data-del]").forEach((b) => {
-      b.addEventListener("click", async () => {
-        const targetId = b.getAttribute("data-del");
-        if (!targetId) return;
-
-        if (!confirm("¿Eliminar este asiento del libro?")) return;
-
-        const entriesNow = Array.isArray(state?.entries) ? state.entries : [];
-        state = { ...state, entries: entriesNow.filter((x) => String(x.id) !== String(targetId)) };
-
-        render();
-        await saveToServer();
-      });
     });
   }
 
   async function loadFromServer() {
-    if (!sb) throw new Error("Libro Memorándum: falta sb (Supabase client).");
-
     const { data, error } = await sb.from(TABLE).select("payload").eq("id", ROW_ID).limit(1);
-
     if (error) {
       console.warn("[LIBRO] load error:", error);
-      state = { entries: [], imported: { guardia_log_keys: [] } };
+      state = { entries: [], imported: { guardia_log_ids: [] } };
       ensureStateShape();
-      isLoaded = true;
       return;
     }
-
     const payload = data?.[0]?.payload;
-    state = payload && typeof payload === "object" ? payload : { entries: [], imported: { guardia_log_keys: [] } };
+    state = payload && typeof payload === "object" ? payload : { entries: [], imported: { guardia_log_ids: [] } };
     ensureStateShape();
-    isLoaded = true;
   }
 
   async function saveToServer() {
@@ -205,20 +177,19 @@ export function initLibroMemorandum({ sb } = {}) {
     if (elHora()) elHora().value = keepHora ? hhmmArNow() : "";
   }
 
-  // ===== IMPORT LOGS DESDE GUARDIA =====
+  // ===== Import Guardia logs =====
 
   function safeArr(x) {
     return Array.isArray(x) ? x : [];
   }
 
-  function guardiaLogKey(l) {
-    const ts = String(l?.ts || "").trim();
-    if (ts) return ts;
-    const hora = String(l?.hora || "").trim();
-    const patrulla = String(l?.patrulla || "").trim();
-    const accion = String(l?.accion || "").trim();
-    const resumen = String(l?.resumen || "").trim();
-    return `${hora}|${patrulla}|${accion}|${resumen}`.trim();
+  function normAction(a) {
+    return String(a || "").trim().toLowerCase();
+  }
+
+  function isImportableAction(a) {
+    const x = normAction(a);
+    return x === "ingreso" || x === "retiro" || x === "presente" || x === "franco" || x === "constancia";
   }
 
   function fmtMovil(m) {
@@ -236,8 +207,13 @@ export function initLibroMemorandum({ sb } = {}) {
     return `${label}${flagsTxt}${obsTxt}`.trim();
   }
 
-  function fmtList(tipo, ids) {
-    const list = safeArr(ids).map((id) => invLabelFromValue(tipo, id)).filter(Boolean);
+  function fmtPersonal(ids) {
+    const list = safeArr(ids).map((id) => invLabelFromValue("personal", id)).filter(Boolean);
+    return list.length ? list.join(", ") : "-";
+  }
+
+  function fmtElementos(ids) {
+    const list = safeArr(ids).map((id) => invLabelFromValue("elemento", id)).filter(Boolean);
     return list.length ? list.join(", ") : "-";
   }
 
@@ -246,45 +222,37 @@ export function initLibroMemorandum({ sb } = {}) {
     return list.length ? list.join(" | ") : "-";
   }
 
-  function fmtCartuchosQty(map) {
-    if (!map || typeof map !== "object") return "";
-    const pairs = Object.entries(map)
-      .map(([k, v]) => [String(k), Math.max(0, parseInt(v, 10) || 0)])
-      .filter(([, n]) => n > 0);
-
-    if (!pairs.length) return "";
-
-    const label = (k) => {
-      if (k === "at_12_70") return "AT 12/70";
-      if (k === "pg_12_70") return "PG 12/70";
-      return k;
-    };
-
-    return pairs.map(([k, n]) => `${label(k)}: ${n}`).join(" · ");
+  function fmtCartuchosQty(qtyMap) {
+    if (!qtyMap || typeof qtyMap !== "object") return "";
+    const pairs = Object.entries(qtyMap)
+      .map(([k, v]) => {
+        const n = Math.max(0, parseInt(v, 10) || 0);
+        if (n <= 0) return null;
+        // keys esperadas: at_12_70 / pg_12_70
+        const label = String(k).toLowerCase().includes("at") ? "AT 12/70" : String(k).toLowerCase().includes("pg") ? "PG 12/70" : k;
+        return `${label}: ${n}`;
+      })
+      .filter(Boolean);
+    return pairs.length ? pairs.join(" | ") : "";
   }
 
   function buildNovedadFromLog(log) {
-    const accion = String(log?.accion || "").trim() || "Novedad";
-    const p = String(log?.patrulla || "").trim();
+    const accion = String(log?.accion || "").trim().toUpperCase();
+    const p = String(log?.patrulla || "").trim(); // "P1"/"P2" (ya viene así en guardia)
     const snap = log?.snapshot || {};
 
     const lugar = String(snap?.lugar || "").trim() || "-";
     const obs = String(snap?.obs || "").trim();
-
-    const personal = fmtList("personal", snap?.personal_ids);
-    const moviles = fmtMoviles(snap?.moviles);
-    const elementos = fmtList("elemento", snap?.elementos_ids);
-
-    const cartTxt = fmtCartuchosQty(snap?.cartuchos_qty_map);
-    const cartLine = cartTxt ? `
-Cartuchos: ${cartTxt}` : "";
-
     const obsTxt = obs ? ` · Obs: ${obs}` : "";
 
-    return `${accion}${p ? " " + p : ""} · Lugar: ${lugar}${obsTxt}
-Personal: ${personal}
-Móviles: ${moviles}
-Elementos: ${elementos}${cartLine}`;
+    const personal = fmtPersonal(snap?.personal_ids);
+    const moviles = fmtMoviles(snap?.moviles);
+    const elementos = fmtElementos(snap?.elementos_ids);
+
+    const cartQty = fmtCartuchosQty(snap?.cartuchos_qty_map);
+    const cartTxt = cartQty ? `\nCartuchos: ${cartQty}` : "";
+
+    return `${accion}${p ? " " + p : ""} · Lugar: ${lugar}${obsTxt}\nPersonal: ${personal}\nMóviles: ${moviles}\nElementos: ${elementos}${cartTxt}`;
   }
 
   async function loadGuardiaPayload() {
@@ -295,73 +263,89 @@ Elementos: ${elementos}${cartLine}`;
   }
 
   async function importLogsFromGuardiaIfNeeded() {
-    try {
-      ensureStateShape();
+    // mutex simple para evitar doble import por clicks rápidos / re-renders
+    if (_importInFlight) return _importInFlight;
 
-      const guardia = await loadGuardiaPayload();
-      const logs = safeArr(guardia?.log);
+    _importInFlight = (async () => {
+      try {
+        ensureStateShape();
 
-      console.log('[LIBRO] Guardia logs:', logs.length);
-      console.log("[LIBRO] Guardia logs:", logs.length);
-      if (!logs.length) return false;
+        // IMPORTA contra el estado más nuevo guardado
+        const guardia = await loadGuardiaPayload();
+        const logs = safeArr(guardia?.log);
 
-      const imported = new Set(state.imported.guardia_log_keys.map(String));
-      const nuevos = [];
+        console.log("[LIBRO] Guardia logs:", logs.length);
 
-      logs.forEach((l) => {
-        const key = guardiaLogKey(l);
-        if (!key) return;
-        if (imported.has(key)) return;
+        if (!logs.length) return false;
 
-        const hora = String(l?.hora || "").trim() || hhmmArNow();
-        const accion = String(l?.accion || "").trim() || "Novedad";
-        const causa = `${accion}${l?.patrulla ? " " + String(l.patrulla).trim() : ""}`.trim();
-        const novedad = buildNovedadFromLog(l);
+        const imported = new Set(state.imported.guardia_log_ids.map(String));
+        const nuevos = [];
 
-        nuevos.push({ key, hora, causa, novedad });
-      });
+        logs.forEach((l) => {
+          if (!isImportableAction(l?.accion)) return;
 
-      if (!nuevos.length) return false;
+          // key estable: ts si existe (de guardia), sino fallback
+          const key = String(l?.ts || `${l?.hora || ""}|${l?.patrulla || ""}|${l?.accion || ""}|${l?.resumen || ""}`).trim();
+          if (!key) return;
+          if (imported.has(key)) return;
 
-      const user = await getUserEmail();
-      const entriesNow = safeArr(state.entries);
+          const hora = String(l?.hora || "").trim() || hhmmArNow();
+          const causa = `${String(l?.accion || "").trim()}${l?.patrulla ? " " + String(l.patrulla).trim() : ""}`.trim();
+          const novedad = buildNovedadFromLog(l);
 
-      const toAppend = nuevos.map((x) => ({
-        id: `g_${Date.now()}_${Math.random().toString(16).slice(2)}`,
-        ts: nowIso(),
-        user,
-        causa: x.causa,
-        hora: x.hora,
-        novedad: x.novedad,
-        meta: {
-          source: "guardia",
-          guardia_key: x.key,
-        },
-      }));
+          nuevos.push({ key, hora, causa, novedad });
+        });
 
-      state.entries = [...entriesNow, ...toAppend];
-      state.imported.guardia_log_keys = [...state.imported.guardia_log_keys, ...nuevos.map((x) => x.key)];
+        if (!nuevos.length) return false;
 
-      render();
-      await saveToServer();
-      return true;
-    } catch (e) {
-      console.warn("[LIBRO] importLogsFromGuardiaIfNeeded error:", e);
-      return false;
-    }
+        const user = await getUserEmail();
+        const entriesNow = safeArr(state.entries);
+
+        const toAppend = nuevos.map((x) => ({
+          id: `g_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+          ts: nowIso(),
+          user,
+          causa: x.causa,
+          hora: x.hora,
+          novedad: x.novedad,
+          meta: { source: "guardia", guardia_key: x.key },
+        }));
+
+        state.entries = [...entriesNow, ...toAppend];
+        state.imported.guardia_log_ids = [...state.imported.guardia_log_ids, ...nuevos.map((x) => x.key)];
+
+        render();
+        await saveToServer();
+        return true;
+      } catch (e) {
+        console.warn("[LIBRO] importLogsFromGuardiaIfNeeded error:", e);
+        return false;
+      } finally {
+        _importInFlight = null;
+      }
+    })();
+
+    return _importInFlight;
   }
 
-  async function ensureLoaded() {
-    if (!isLoaded) await loadFromServer();
-    ensureStateShape();
+  async function ensureLoadedOnce() {
+    if (_loadedOnce) return;
+    await loadFromServer();
+    _loadedOnce = true;
   }
 
   async function onTabLibroActivated() {
-    // Gatillo: cada vez que abrís la solapa Libro, intenta importar cambios.
-    await ensureLoaded();
-    bloquearHora();
-    const changed = await importLogsFromGuardiaIfNeeded();
-    if (!changed) render();
+    try {
+      await ensureLoadedOnce();
+      bloquearHora();
+
+      // Importa SOLO si hay novedades
+      const changed = await importLogsFromGuardiaIfNeeded();
+      if (changed) console.log("[LIBRO] Import OK (había nuevos logs).");
+      render();
+    } catch (e) {
+      console.warn("[LIBRO] onTabLibroActivated error:", e);
+    }
   }
 
   // ===== Acciones manuales del libro =====
@@ -375,6 +359,8 @@ Elementos: ${elementos}${cartLine}`;
 
     if (!causa) return alert("Seleccioná una causa.");
     if (!novedad) return alert("Escribí la novedad / referencia.");
+
+    await ensureLoadedOnce();
 
     const user = await getUserEmail();
     const entry = {
@@ -398,6 +384,27 @@ Elementos: ${elementos}${cartLine}`;
     limpiarForm({ keepHora: true });
   }
 
+  function bindTabHook() {
+    // Nos enganchamos a los botones de tab del layout existente.
+    document.querySelectorAll('.tab-btn[data-tab="libro"]').forEach((b) => {
+      b.addEventListener("click", () => {
+        // Espera un tick para que tabs.js marque el panel como activo.
+        setTimeout(() => onTabLibroActivated(), 0);
+      });
+    });
+
+    // fallback: si por alguna razón tabs.js no emite click (ej. activación programática),
+    // al enfocar algún elemento del tab intentamos importar una vez.
+    const panel = document.getElementById("tab-libro");
+    if (panel) {
+      panel.addEventListener("focusin", () => {
+        // si el panel está visible/activo, importamos
+        const active = panel.classList.contains("is-active") || panel.style.display !== "none";
+        if (active) onTabLibroActivated();
+      });
+    }
+  }
+
   return {
     bind() {
       const a = btnAgregar();
@@ -405,67 +412,20 @@ Elementos: ${elementos}${cartLine}`;
       if (a) a.addEventListener("click", onAgregar);
       if (l) l.addEventListener("click", onLimpiar);
 
-      // Hora visible pero bloqueada
       bloquearHora();
-
-      // ✅ Importación automática al ENTRAR a la solapa "Libro memorándum"
-      // Ultra-robusta: click directo + delegación + observer + fallback.
-      const fire = () => {
-        onTabLibroActivated().catch((e) => console.warn("[LIBRO] onTabLibroActivated error:", e));
-      };
-
-      // 1) Click directo (si el botón existe y no se recrea)
-      const btn = btnTabLibro();
-      if (btn && !btn.__libroBound) {
-        btn.__libroBound = true;
-        btn.addEventListener("click", fire);
-      }
-
-      // 2) Delegación (por si tabs.js recrea botones)
-      if (!document.__libroDelegated) {
-        document.__libroDelegated = true;
-        document.addEventListener("click", (ev) => {
-          const b = ev.target?.closest?.(".tab-btn[data-tab='libro']");
-          if (b) fire();
-        });
-      }
-
-      // 3) MutationObserver sobre el panel (cuando pasa a is-active)
-      const panel = panelLibro();
-      if (panel && !panel.__libroObserved) {
-        panel.__libroObserved = true;
-        const mo = new MutationObserver(() => {
-          if (panel.classList.contains("is-active")) fire();
-        });
-        mo.observe(panel, { attributes: true, attributeFilter: ["class"] });
-      }
-
-      // 4) Si ya está activo al bind (recarga), importamos una vez
-      setTimeout(() => {
-        const p = panelLibro();
-        if (p && p.classList.contains("is-active")) fire();
-      }, 50);
-
-      // 5) Fallback suave: chequea cada 2s solo para esta pantalla
-      if (!window.__libroPoll) {
-        window.__libroPoll = true;
-        setInterval(() => {
-          const p = panelLibro();
-          if (p && p.classList.contains("is-active")) fire();
-        }, 2000);
-      }
+      bindTabHook();
     },
+
     async init() {
-      await ensureLoaded();
+      // Carga inicial del libro (sin importar aún)
+      await ensureLoadedOnce();
       bloquearHora();
       render();
     },
 
-    async importGuardiaNow() {
-      await ensureLoaded();
-      const changed = await importLogsFromGuardiaIfNeeded();
-      render();
-      return changed;
+    // por si querés llamarlo desde afuera (opcional)
+    async importNow() {
+      await onTabLibroActivated();
     },
   };
 }
