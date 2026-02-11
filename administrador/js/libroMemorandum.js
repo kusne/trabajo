@@ -300,6 +300,9 @@ Elementos: ${elementos}${cartLine}`;
 
       const guardia = await loadGuardiaPayload();
       const logs = safeArr(guardia?.log);
+
+      console.log('[LIBRO] Guardia logs:', logs.length);
+      console.log("[LIBRO] Guardia logs:", logs.length);
       if (!logs.length) return false;
 
       const imported = new Set(state.imported.guardia_log_keys.map(String));
@@ -402,30 +405,56 @@ Elementos: ${elementos}${cartLine}`;
       if (a) a.addEventListener("click", onAgregar);
       if (l) l.addEventListener("click", onLimpiar);
 
+      // Hora visible pero bloqueada
       bloquearHora();
 
-      // ✅ Gatillo principal: click en la pestaña Libro memorándum
-      const tabBtn = btnTabLibro();
-      if (tabBtn && !tabBtn.__libro_hooked) {
-        tabBtn.__libro_hooked = true;
-        tabBtn.addEventListener("click", () => {
-          onTabLibroActivated().catch(console.warn);
+      // ✅ Importación automática al ENTRAR a la solapa "Libro memorándum"
+      // Ultra-robusta: click directo + delegación + observer + fallback.
+      const fire = () => {
+        onTabLibroActivated().catch((e) => console.warn("[LIBRO] onTabLibroActivated error:", e));
+      };
+
+      // 1) Click directo (si el botón existe y no se recrea)
+      const btn = btnTabLibro();
+      if (btn && !btn.__libroBound) {
+        btn.__libroBound = true;
+        btn.addEventListener("click", fire);
+      }
+
+      // 2) Delegación (por si tabs.js recrea botones)
+      if (!document.__libroDelegated) {
+        document.__libroDelegated = true;
+        document.addEventListener("click", (ev) => {
+          const b = ev.target?.closest?.(".tab-btn[data-tab='libro']");
+          if (b) fire();
         });
       }
 
-      // ✅ Fallback: si el tab se activa por código (sin click)
+      // 3) MutationObserver sobre el panel (cuando pasa a is-active)
       const panel = panelLibro();
-      if (panel && !panel.__libro_observer) {
-        panel.__libro_observer = true;
-        const obs = new MutationObserver(() => {
-          if (panel.classList.contains("is-active")) {
-            onTabLibroActivated().catch(console.warn);
-          }
+      if (panel && !panel.__libroObserved) {
+        panel.__libroObserved = true;
+        const mo = new MutationObserver(() => {
+          if (panel.classList.contains("is-active")) fire();
         });
-        obs.observe(panel, { attributes: true, attributeFilter: ["class"] });
+        mo.observe(panel, { attributes: true, attributeFilter: ["class"] });
+      }
+
+      // 4) Si ya está activo al bind (recarga), importamos una vez
+      setTimeout(() => {
+        const p = panelLibro();
+        if (p && p.classList.contains("is-active")) fire();
+      }, 50);
+
+      // 5) Fallback suave: chequea cada 2s solo para esta pantalla
+      if (!window.__libroPoll) {
+        window.__libroPoll = true;
+        setInterval(() => {
+          const p = panelLibro();
+          if (p && p.classList.contains("is-active")) fire();
+        }, 2000);
       }
     },
-
     async init() {
       await ensureLoaded();
       bloquearHora();
