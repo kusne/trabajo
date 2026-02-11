@@ -36,6 +36,10 @@ export function initLibroMemorandum({ sb }) {
   let state = { entries: [], imported: { guardia_log_ids: [] } };
   let _loadedOnce = false;
   let _importInFlight = null;
+  let _lastActivateTs = 0;
+
+  // Evita enganchar listeners múltiples si este módulo se inicializa más de una vez.
+  const HOOK_FLAG = "__adm_libro_hook_v1";
 
   function nowIso() {
     return new Date().toISOString();
@@ -278,7 +282,12 @@ export function initLibroMemorandum({ sb }) {
 
         if (!logs.length) return false;
 
-        const imported = new Set(state.imported.guardia_log_ids.map(String));
+        // Dedupe fuerte: lo ya importado + lo ya existente en entries (por meta.guardia_key)
+        const imported = new Set((state.imported.guardia_log_ids || []).map(String));
+        safeArr(state.entries)
+          .map((e) => e?.meta?.guardia_key)
+          .filter(Boolean)
+          .forEach((k) => imported.add(String(k)));
         const nuevos = [];
 
         logs.forEach((l) => {
@@ -301,8 +310,21 @@ export function initLibroMemorandum({ sb }) {
         const user = await getUserEmail();
         const entriesNow = safeArr(state.entries);
 
+        // id estable por key (evita triplicados incluso con imports repetidos)
+        function hashKey(str) {
+          const s = String(str || "");
+          let h = 5381;
+          for (let i = 0; i < s.length; i++) h = (h * 33) ^ s.charCodeAt(i);
+          return (h >>> 0).toString(16);
+        }
+
+        // IMPORTANTE: marcamos como importado ANTES de guardar (anti-reentrancia)
+        const newKeys = nuevos.map((x) => String(x.key));
+        newKeys.forEach((k) => imported.add(k));
+        state.imported.guardia_log_ids = Array.from(imported);
+
         const toAppend = nuevos.map((x) => ({
-          id: `g_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+          id: `g_${hashKey(x.key)}`,
           ts: nowIso(),
           user,
           causa: x.causa,
@@ -312,7 +334,7 @@ export function initLibroMemorandum({ sb }) {
         }));
 
         state.entries = [...entriesNow, ...toAppend];
-        state.imported.guardia_log_ids = [...state.imported.guardia_log_ids, ...nuevos.map((x) => x.key)];
+        // state.imported ya fue actualizado arriba
 
         render();
         await saveToServer();
@@ -385,10 +407,20 @@ export function initLibroMemorandum({ sb }) {
   }
 
   function bindTabHook() {
+    // Si el módulo se inicializa más de una vez, no duplicamos listeners.
+    if (typeof window !== "undefined") {
+      if (window[HOOK_FLAG]) return;
+      window[HOOK_FLAG] = true;
+    }
+
     // Nos enganchamos a los botones de tab del layout existente.
     document.querySelectorAll('.tab-btn[data-tab="libro"]').forEach((b) => {
       b.addEventListener("click", () => {
         // Espera un tick para que tabs.js marque el panel como activo.
+        // Anti-rebote para evitar importaciones múltiples.
+        const now = Date.now();
+        if (now - _lastActivateTs < 500) return;
+        _lastActivateTs = now;
         setTimeout(() => onTabLibroActivated(), 0);
       });
     });
@@ -400,7 +432,11 @@ export function initLibroMemorandum({ sb }) {
       panel.addEventListener("focusin", () => {
         // si el panel está visible/activo, importamos
         const active = panel.classList.contains("is-active") || panel.style.display !== "none";
-        if (active) onTabLibroActivated();
+        if (!active) return;
+        const now = Date.now();
+        if (now - _lastActivateTs < 500) return;
+        _lastActivateTs = now;
+        onTabLibroActivated();
       });
     }
   }
