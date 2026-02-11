@@ -38,6 +38,7 @@ export function initLibroMemorandum({ sb }) {
   // }
   // Compat: si existía imported.guardia_retiro_ids (versiones anteriores), se migra a guardia_log_keys.
   let state = { entries: [], imported: { guardia_log_keys: [] } };
+  let importErrorShown = false;
 
   function nowIso() {
     return new Date().toISOString();
@@ -291,6 +292,17 @@ export function initLibroMemorandum({ sb }) {
   }
 
   async function loadGuardiaPayload() {
+    // ✅ Asegurar sesión (si RLS está activo, sin sesión no se puede leer)
+    try {
+      const { data: sdata } = await sb.auth.getSession();
+      if (!sdata?.session) {
+        throw new Error("Sin sesión activa (no se puede importar desde Guardia)");
+      }
+    } catch (e) {
+      // re-lanzamos para que el import muestre el problema
+      throw e;
+    }
+
     const { data, error } = await sb.from(GUARDIA_TABLE).select("payload").eq("id", GUARDIA_ROW_ID).limit(1);
     if (error) throw error;
     const payload = data?.[0]?.payload;
@@ -352,7 +364,17 @@ export function initLibroMemorandum({ sb }) {
       await saveToServer();
       return true;
     } catch (e) {
-      console.warn("[LIBRO] importLogsFromGuardiaIfNeeded error:", e);
+      console.error("[LIBRO] importLogsFromGuardiaIfNeeded error:", e);
+      // ✅ No tragarse el error en silencio: avisamos una sola vez para no molestar.
+      if (!importErrorShown) {
+        importErrorShown = true;
+        const msg = String(e?.message || e || "").trim();
+        alert(
+          "No pude importar desde Guardia.\n\n" +
+            (msg ? `Motivo: ${msg}\n\n` : "") +
+            "Abrí Console (F12) para ver el error completo."
+        );
+      }
       return false;
     }
   }
